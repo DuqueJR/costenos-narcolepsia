@@ -36,4 +36,12 @@ var (
 	// ErrPatientAwake is returned when someone tries to attend a sleep
 	// emergency of a patient who is awake.
 	ErrPatientAwake = errors.New("patient is awake")
+
+	// ErrDuplicateID is returned when the hospital registers a patient, a
+	// staff member or a room whose identifier is already registered.
+	ErrDuplicateID = errors.New("duplicate id")
+
+	// ErrNotFound is returned when the hospital looks for a patient, a
+	// doctor or a room that is not registered.
+	ErrNotFound = errors.New("not found")
 )

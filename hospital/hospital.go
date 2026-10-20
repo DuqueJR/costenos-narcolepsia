@@ -1,3 +1,149 @@
 package hospital
 
-// Hospital, which orchestrates patients, rooms and staff, will live here.
+import (
+	"fmt"
+	"slices"
+)
+
+// Hospital orchestrates patients, rooms and staff. Its fields are
+// unexported, so everything is registered and read through its methods.
+// The staff lives in a []Attender, so the hospital can dispatch any kind of
+// staff member (doctor, orderly...) without knowing its concrete type.
+type Hospital struct {
+	name     string
+	patients []*Patient
+	doctors  []*Doctor
+	staff    []Attender
+	rooms    []*Room
+	history  []EpisodeRecord
+	next     int // index of the next Attender in the round-robin dispatch
+}
+
+// NewHospital builds an empty Hospital called name.
+func NewHospital(name string) *Hospital {
+	return &Hospital{name: name}
+}
+
+// AdmitPatient registers patient p in the hospital. It returns an error
+// wrapping ErrInvalidData if p is nil, or ErrDuplicateID if a patient with
+// the same ID is already admitted.
+func (h *Hospital) AdmitPatient(p *Patient) error {
+	if p == nil {
+		return fmt.Errorf("admit patient: nil patient: %w", ErrInvalidData)
+	}
+	if _, err := h.FindPatient(p.ID()); err == nil {
+		return fmt.Errorf("admit patient %s: %w", p.ID(), ErrDuplicateID)
+	}
+	h.patients = append(h.patients, p)
+	return nil
+}
+
+// HireStaff adds staff member a to the staff of the hospital. Any type
+// that implements Attender can be hired, such as an Orderly. It returns an
+// error wrapping ErrInvalidData if a is nil, or ErrDuplicateID if a staff
+// member with the same ID is already hired.
+func (h *Hospital) HireStaff(a Attender) error {
+	if a == nil {
+		return fmt.Errorf("hire staff: nil attender: %w", ErrInvalidData)
+	}
+	for _, s := range h.staff {
+		if s.ID() == a.ID() {
+			return fmt.Errorf("hire staff %s: %w", a.ID(), ErrDuplicateID)
+		}
+	}
+	h.staff = append(h.staff, a)
+	return nil
+}
+
+// HireDoctor adds doctor d to the staff, so it can attend emergencies, and
+// to the doctors of the hospital, so it can be found with FindDoctor. It
+// returns an error wrapping ErrInvalidData if d is nil, or the error of
+// HireStaff.
+func (h *Hospital) HireDoctor(d *Doctor) error {
+	if d == nil {
+		return fmt.Errorf("hire doctor: nil doctor: %w", ErrInvalidData)
+	}
+	if err := h.HireStaff(d); err != nil {
+		return fmt.Errorf("hire doctor: %w", err)
+	}
+	h.doctors = append(h.doctors, d)
+	return nil
+}
+
+// AddRoom adds room r to the hospital. It returns an error wrapping
+// ErrInvalidData if r is nil, or ErrDuplicateID if a room with the same
+// number already exists.
+func (h *Hospital) AddRoom(r *Room) error {
+	if r == nil {
+		return fmt.Errorf("add room: nil room: %w", ErrInvalidData)
+	}
+	if _, err := h.FindRoom(r.Number()); err == nil {
+		return fmt.Errorf("add room %d: %w", r.Number(), ErrDuplicateID)
+	}
+	h.rooms = append(h.rooms, r)
+	return nil
+}
+
+// FindPatient returns the admitted patient with the given id. It returns an
+// error wrapping ErrNotFound if there is none.
+func (h *Hospital) FindPatient(id string) (*Patient, error) {
+	for _, p := range h.patients {
+		if p.ID() == id {
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("find patient %s: %w", id, ErrNotFound)
+}
+
+// FindDoctor returns the hired doctor with the given id. It returns an
+// error wrapping ErrNotFound if there is none.
+func (h *Hospital) FindDoctor(id string) (*Doctor, error) {
+	for _, d := range h.doctors {
+		if d.ID() == id {
+			return d, nil
+		}
+	}
+	return nil, fmt.Errorf("find doctor %s: %w", id, ErrNotFound)
+}
+
+// FindRoom returns the room with the given number. It returns an error
+// wrapping ErrNotFound if there is none.
+func (h *Hospital) FindRoom(number int) (*Room, error) {
+	for _, r := range h.rooms {
+		if r.Number() == number {
+			return r, nil
+		}
+	}
+	return nil, fmt.Errorf("find room %d: %w", number, ErrNotFound)
+}
+
+// Name returns the name of the hospital.
+func (h *Hospital) Name() string {
+	return h.name
+}
+
+// Patients returns a copy of the admitted patients, so callers cannot
+// change the hospital by modifying the returned slice.
+func (h *Hospital) Patients() []*Patient {
+	return slices.Clone(h.patients)
+}
+
+// Doctors returns a copy of the hired doctors.
+func (h *Hospital) Doctors() []*Doctor {
+	return slices.Clone(h.doctors)
+}
+
+// Staff returns a copy of the whole staff, doctors included.
+func (h *Hospital) Staff() []Attender {
+	return slices.Clone(h.staff)
+}
+
+// Rooms returns a copy of the rooms of the hospital.
+func (h *Hospital) Rooms() []*Room {
+	return slices.Clone(h.rooms)
+}
+
+// History returns a copy of every episode registered in the hospital.
+func (h *Hospital) History() []EpisodeRecord {
+	return slices.Clone(h.history)
+}
