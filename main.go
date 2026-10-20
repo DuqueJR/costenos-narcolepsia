@@ -2,9 +2,11 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"costenos-narcolepsia/hospital"
 )
@@ -55,8 +57,7 @@ func main() {
 		len(h.Doctors()), len(h.Staff()), len(h.Rooms()), len(h.Patients()))
 
 	// 2. Four patients suffer a sleep attack. The fourth one finds no room.
-	fmt.Println()
-	fmt.Println("== Sleep attacks ==")
+	printHeader("Sleep attacks")
 	attacks := []struct {
 		patient  *hospital.Patient
 		location string
@@ -75,8 +76,8 @@ func main() {
 		case errors.Is(err, hospital.ErrNoRoomAvailable):
 			// The episode was registered anyway: the patient sleeps in the hallway.
 			fmt.Println("  " + rec.Summary())
-			fmt.Printf("  ! %s %s could not get a bed and stays in the hallway (%v)\n",
-				a.patient.ID(), a.patient.Name(), err)
+			fmt.Printf("  ! %s could not get a bed and stays in the hallway (%v)\n",
+				patientColumns(a.patient), err)
 			noRoomErr = err
 		default:
 			exitOnError(err)
@@ -84,61 +85,89 @@ func main() {
 	}
 
 	// 3. Right after the failure, the patient is visible in the hallway.
-	fmt.Println()
 	printHallway(h)
 
 	// 4. P-002 wakes up and frees a bed, which then goes to P-004.
-	fmt.Println()
-	fmt.Println("== P-002 wakes up ==")
+	printHeader("P-002 wakes up")
 	sleeper, hallwayPatient := patients[1], patients[3]
 	freed := sleeper.Room() // read before waking up: WakeUpPatient leaves the patient without a room
 	exitOnError(h.WakeUpPatient(sleeper))
 	if freed != nil {
-		fmt.Printf("  %s %s woke up and released room %d\n", sleeper.ID(), sleeper.Name(), freed.Number())
+		fmt.Printf("  %s woke up and released room %d\n", patientColumns(sleeper), freed.Number())
 	} else {
-		fmt.Printf("  %s %s woke up (had no room)\n", sleeper.ID(), sleeper.Name())
+		fmt.Printf("  %s woke up (had no room)\n", patientColumns(sleeper))
 	}
 	reassigned, err := h.AssignRoom(hallwayPatient)
 	exitOnError(err)
-	fmt.Printf("  %s %s -> room %d\n", hallwayPatient.ID(), hallwayPatient.Name(), reassigned.Number())
+	fmt.Printf("  %s -> room %d\n", patientColumns(hallwayPatient), reassigned.Number())
 
 	// 5. The four required queries.
-	fmt.Println()
 	printHallway(h)
-
 	for _, d := range h.Doctors() {
-		fmt.Println()
-		fmt.Printf("== Episodes attended by Dr. %s (%s) ==\n", d.Name(), d.Specialty())
-		episodes := d.MyEpisodes()
-		if len(episodes) == 0 {
-			fmt.Println("  (none)")
-		}
-		for _, rec := range episodes {
-			fmt.Println("  " + rec.Summary())
-		}
+		printDoctorEpisodes(d)
 	}
+	printRoomAssignment(hallwayPatient, noRoomErr, reassigned)
+	printSevereReport(h)
+}
 
-	fmt.Println()
-	fmt.Println("== Room assignment ==")
-	fmt.Printf("  first attempt for %s: %v\n", hallwayPatient.ID(), noRoomErr)
-	fmt.Printf("  after %s woke up:    %s -> room %d\n", sleeper.ID(), hallwayPatient.ID(), reassigned.Number())
+// printHeader prints a blank line and the title of a block of the output.
+func printHeader(title string) {
+	fmt.Printf("\n== %s ==\n", title)
+}
 
-	fmt.Println()
-	fmt.Println("== Severity report (Severe patients) ==")
-	for p, episodes := range h.SevereReport() {
-		fmt.Printf("  %s %s  %d episodes today\n", p.ID(), p.Name(), episodes)
-	}
+// patientColumns returns the ID and the name of p padded to a fixed width,
+// so every line that starts with a patient keeps its columns aligned.
+func patientColumns(p *hospital.Patient) string {
+	return fmt.Sprintf("%-6s %-16s", p.ID(), p.Name())
 }
 
 // printHallway prints the patients asleep in a hallway, or "(none)".
 func printHallway(h *hospital.Hospital) {
-	fmt.Println("== Patients asleep in hallway ==")
+	printHeader("Patients asleep in hallway")
 	hallway := h.PatientsInHallway()
 	if len(hallway) == 0 {
 		fmt.Println("  (none)")
 	}
 	for _, p := range hallway {
-		fmt.Printf("  %s %s (%s)\n", p.ID(), p.Name(), p.Location())
+		fmt.Printf("  %s (%s)\n", patientColumns(p), p.Location())
+	}
+}
+
+// printDoctorEpisodes prints every episode attended by doctor d, or "(none)".
+func printDoctorEpisodes(d *hospital.Doctor) {
+	printHeader(fmt.Sprintf("Episodes attended by Dr. %s (%s)", d.Name(), d.Specialty()))
+	episodes := d.MyEpisodes()
+	if len(episodes) == 0 {
+		fmt.Println("  (none)")
+	}
+	for _, rec := range episodes {
+		fmt.Println("  " + rec.Summary())
+	}
+}
+
+// printRoomAssignment prints how the room assignment of patient p went: the
+// error of the first attempt and the room it got on the second one.
+func printRoomAssignment(p *hospital.Patient, firstErr error, room *hospital.Room) {
+	printHeader("Room assignment")
+	fmt.Printf("  %s first attempt:  %v\n", patientColumns(p), firstErr)
+	fmt.Printf("  %s second attempt: room %d\n", patientColumns(p), room.Number())
+}
+
+// printSevereReport prints the result of SevereReport sorted by patient ID.
+// A map has no order, so its keys are sorted first to get the same output on
+// every run.
+func printSevereReport(h *hospital.Hospital) {
+	printHeader("Severity report (Severe patients)")
+	report := h.SevereReport()
+	severe := make([]*hospital.Patient, 0, len(report))
+	for p := range report {
+		severe = append(severe, p)
+	}
+	slices.SortFunc(severe, func(a, b *hospital.Patient) int {
+		return cmp.Compare(a.ID(), b.ID())
+	})
+	for _, p := range severe {
+		fmt.Printf("  %s %d episode(s) today\n", patientColumns(p), report[p])
 	}
 }
 
