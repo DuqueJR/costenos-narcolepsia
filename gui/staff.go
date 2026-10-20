@@ -48,13 +48,15 @@ func newStaffPage(a *App) page {
 	})
 
 	content := container.NewVBox(
-		newHeading("Doctores", theme.SizeNameSubHeadingText), doctors,
-		newHeading("Camilleros", theme.SizeNameSubHeadingText), orderlies,
+		newSectionTitle("Doctores"), doctors,
+		newSectionTitle("Camilleros"), orderlies,
 	)
 	return page{
+		section:  "Hospital",
 		title:    "Personal",
-		subtitle: "Quién atiende las emergencias, por turnos",
+		subtitle: "La gente que atiende, por turnos y sin pereza",
 		icon:     theme.LoginIcon(),
+		color:    indigo,
 		actions: []fyne.CanvasObject{
 			newActionButton("Contratar doctor", theme.ContentAddIcon(), widget.HighImportance, a.showHireDoctorForm),
 			newActionButton("Contratar camillero", theme.ContentAddIcon(), widget.MediumImportance, a.showHireOrderlyForm),
@@ -83,7 +85,7 @@ func newStaffCard(name, id, role string, stats []stat) fyne.CanvasObject {
 		value := newHeading(strconv.Itoa(s.value), theme.SizeNameSubHeadingText)
 		numbers.Add(container.NewVBox(value, padded(4, newCaption(s.caption))))
 	}
-	return newPanel(container.NewVBox(header, widget.NewSeparator(), numbers))
+	return newPanel(container.NewVBox(header, padded(2, numbers)))
 }
 
 // attendedByStaff counts, from history, how many episodes each staff member

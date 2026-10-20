@@ -51,9 +51,11 @@ type patientsView struct {
 func newPatientsPage(a *App) page {
 	v := &patientsView{a: a}
 	return page{
+		section:  "Hospital",
 		title:    "Pacientes",
-		subtitle: "Busca un paciente, mira su estado y registra lo que le pasa",
+		subtitle: "Sin afán, pero sin dormirse: busca, mira y atiende",
 		icon:     theme.AccountIcon(),
+		color:    red,
 		actions: []fyne.CanvasObject{
 			newActionButton("Admitir paciente", theme.ContentAddIcon(), widget.HighImportance, a.showAdmitPatientForm),
 		},
@@ -106,7 +108,7 @@ func (v *patientsView) build() fyne.CanvasObject {
 // buildDetail creates the right panel: an empty state and the detail of the
 // selected patient, one on top of the other, so only one is visible.
 func (v *patientsView) buildDetail() fyne.CanvasObject {
-	v.avatar = newAvatar(76)
+	v.avatar = newAvatar(72)
 	v.name = newHeading("", theme.SizeNameHeadingText)
 	v.subtitle = newCaption("")
 	v.statePill = newPill()
@@ -119,11 +121,11 @@ func (v *patientsView) buildDetail() fyne.CanvasObject {
 	v.location = widget.NewLabel("")
 	v.room = widget.NewLabel("")
 	v.doctor = widget.NewLabel("")
-	info := container.NewGridWithColumns(2,
-		infoItem("Edad", v.age),
-		infoItem("Último ataque en", v.location),
-		infoItem("Cuarto", v.room),
-		infoItem("Doctor asignado", v.doctor),
+	info := newGroupedList(
+		newInfoRow("Edad", v.age),
+		newInfoRow("Último ataque en", v.location),
+		newInfoRow("Cuarto", v.room),
+		newInfoRow("Doctor asignado", v.doctor),
 	)
 
 	v.attackLocation = widget.NewEntry()
@@ -137,20 +139,14 @@ func (v *patientsView) buildDetail() fyne.CanvasObject {
 		container.NewGridWithColumns(2, v.wakeBtn, v.assignBtn),
 	)
 
-	v.detail = container.NewVBox(header, widget.NewSeparator(), padded(4, info), widget.NewSeparator(), actions)
+	v.detail = container.NewVBox(header, padded(6, info), actions)
 
-	icon := widget.NewIcon(theme.NewColoredResource(theme.AccountIcon(), theme.ColorNamePrimary))
-	hint := widget.NewLabelWithStyle("Selecciona un paciente de la lista", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	hint := widget.NewLabelWithStyle("Escoge un paciente de la lista, mi llave", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	v.empty = container.NewCenter(container.NewVBox(
-		container.NewCenter(container.NewGridWrap(fyne.NewSize(64, 64), icon)), hint))
+		container.NewCenter(newIconBadge(theme.AccountIcon(), red, 56)), hint,
+		container.NewCenter(newCaption("Aquí vas a ver su estado y lo que puedes hacer"))))
 
 	return newPanel(container.NewStack(v.empty, container.NewVScroll(v.detail)))
-}
-
-// infoItem returns a small gray caption over value, for the detail grid.
-func infoItem(caption string, value *widget.Label) fyne.CanvasObject {
-	value.TextStyle = fyne.TextStyle{Bold: true}
-	return container.NewVBox(padded(2, newCaption(caption)), value)
 }
 
 // refresh reloads the list and the detail from the hospital. App.refreshAll
@@ -225,7 +221,7 @@ func (v *patientsView) sleepAttack() {
 	case errors.Is(err, hospital.ErrNoRoomAvailable):
 		// The episode is registered anyway: the patient sleeps in the hallway.
 		v.a.lastAssign = &assignResult{patient: p, err: err}
-		v.a.showWarning("Episodio registrado, pero no hay cuarto: el paciente queda en el pasillo")
+		v.a.showWarning("¡Erda! Episodio registrado, pero no hay cuarto: el paciente queda en el pasillo")
 	default:
 		// Nothing was registered, so it is not an assignment result.
 		v.a.showError(err)
@@ -250,7 +246,7 @@ func (v *patientsView) assignRoom() {
 	v.a.lastAssign = &assignResult{patient: p, room: r, err: err}
 	switch {
 	case errors.Is(err, hospital.ErrNoRoomAvailable):
-		v.a.showWarning("No hay cuartos libres: el paciente sigue en el pasillo")
+		v.a.showWarning("Ombe, no hay cuartos libres: el paciente sigue en el pasillo")
 	case err != nil:
 		v.a.showError(err)
 	}

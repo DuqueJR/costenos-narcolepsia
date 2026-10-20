@@ -9,23 +9,30 @@ import (
 	"costenos-narcolepsia/hospital"
 )
 
-// Palette of the GUI: a light Caribbean look with sand, turquoise and coral.
+// Palette of the GUI: the clean grays of Apple interfaces plus the colors of
+// the Caribbean coast, the sea and the sun.
 var (
-	sand      = color.NRGBA{R: 0xFA, G: 0xF6, B: 0xEF, A: 0xFF} // window background
-	sandDark  = color.NRGBA{R: 0xF1, G: 0xEB, B: 0xE1, A: 0xFF} // buttons and table headers
-	white     = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // panels
-	border    = color.NRGBA{R: 0xE8, G: 0xE1, B: 0xD5, A: 0xFF} // panel borders and separators
-	turquoise = color.NRGBA{R: 0x0E, G: 0x9F, B: 0x9A, A: 0xFF} // main color
-	deepSea   = color.NRGBA{R: 0x0B, G: 0x4F, B: 0x5C, A: 0xFF} // dark end of the banner
-	coral     = color.NRGBA{R: 0xF2, G: 0x66, B: 0x5B, A: 0xFF} // errors and dangerous actions
-	ink       = color.NRGBA{R: 0x1F, G: 0x2D, B: 0x3D, A: 0xFF} // text
-	muted     = color.NRGBA{R: 0x6B, G: 0x7A, B: 0x89, A: 0xFF} // secondary text
+	canvasGray = color.NRGBA{R: 0xF5, G: 0xF5, B: 0xF7, A: 0xFF} // window background
+	sidebarBg  = color.NRGBA{R: 0xEE, G: 0xEE, B: 0xF2, A: 0xFF} // sidebar
+	fillGray   = color.NRGBA{R: 0xE9, G: 0xE9, B: 0xEC, A: 0xFF} // buttons and segmented track
+	fieldGray  = color.NRGBA{R: 0xF2, G: 0xF2, B: 0xF5, A: 0xFF} // text fields
+	hairline   = color.NRGBA{R: 0xE3, G: 0xE3, B: 0xE8, A: 0xFF} // separators
+	white      = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // cards
+	ink        = color.NRGBA{R: 0x1D, G: 0x1D, B: 0x1F, A: 0xFF} // text
+	muted      = color.NRGBA{R: 0x6E, G: 0x6E, B: 0x73, A: 0xFF} // secondary text
+	faint      = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xA6, A: 0xFF} // placeholders and disabled text
 
-	green  = color.NRGBA{R: 0x16, G: 0xA3, B: 0x4A, A: 0xFF}
-	amber  = color.NRGBA{R: 0xD9, G: 0x77, B: 0x06, A: 0xFF}
-	indigo = color.NRGBA{R: 0x4F, G: 0x46, B: 0xE5, A: 0xFF}
-	gray   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
-	slate  = color.NRGBA{R: 0x64, G: 0x74, B: 0x8B, A: 0xFF}
+	caribe = color.NRGBA{R: 0x0A, G: 0x7E, B: 0xA4, A: 0xFF} // main color: the Caribbean sea
+	sky    = color.NRGBA{R: 0x3F, G: 0xB8, B: 0xD9, A: 0xFF} // light end of the sea gradient
+	sun    = color.NRGBA{R: 0xFF, G: 0xC2, B: 0x33, A: 0xFF} // the coast sun
+	cream  = color.NRGBA{R: 0xF4, G: 0xEA, B: 0xD5, A: 0xFF} // cane fiber of the sombrero vueltiao
+
+	green  = color.NRGBA{R: 0x34, G: 0xC7, B: 0x59, A: 0xFF}
+	orange = color.NRGBA{R: 0xFF, G: 0x95, B: 0x00, A: 0xFF}
+	indigo = color.NRGBA{R: 0x58, G: 0x56, B: 0xD6, A: 0xFF}
+	red    = color.NRGBA{R: 0xFF, G: 0x45, B: 0x3A, A: 0xFF}
+	pink   = color.NRGBA{R: 0xFF, G: 0x2D, B: 0x55, A: 0xFF}
+	gray   = color.NRGBA{R: 0x8E, G: 0x8E, B: 0x93, A: 0xFF}
 )
 
 // caribeTheme is the light theme of the GUI. It only changes some colors
@@ -40,38 +47,44 @@ var _ fyne.Theme = caribeTheme{}
 // Color returns the color of the theme called name.
 func (caribeTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	switch name {
-	case theme.ColorNameBackground:
-		return sand
-	case theme.ColorNameButton, theme.ColorNameHeaderBackground:
-		return sandDark
-	case theme.ColorNameInputBackground, theme.ColorNameOverlayBackground, theme.ColorNameMenuBackground:
+	case theme.ColorNameBackground, theme.ColorNameHeaderBackground:
+		return canvasGray
+	case theme.ColorNameButton, theme.ColorNameDisabledButton:
+		return fillGray
+	case theme.ColorNameInputBackground:
+		return fieldGray
+	case theme.ColorNameInputBorder:
+		return fieldGray // borderless fields; the focus color still draws a ring
+	case theme.ColorNameOverlayBackground, theme.ColorNameMenuBackground:
 		return white
-	case theme.ColorNameInputBorder, theme.ColorNameSeparator:
-		return border
+	case theme.ColorNameSeparator:
+		return hairline
 	case theme.ColorNamePrimary, theme.ColorNameHyperlink:
-		return turquoise
+		return caribe
 	case theme.ColorNameFocus:
-		return color.NRGBA{R: turquoise.R, G: turquoise.G, B: turquoise.B, A: 0x88}
+		return tint(caribe, 0x80)
 	case theme.ColorNameSelection:
-		return color.NRGBA{R: turquoise.R, G: turquoise.G, B: turquoise.B, A: 0x33}
+		return tint(caribe, 0x1F)
 	case theme.ColorNameHover:
-		return color.NRGBA{R: turquoise.R, G: turquoise.G, B: turquoise.B, A: 0x1A}
+		return color.NRGBA{A: 0x0A}
+	case theme.ColorNamePressed:
+		return color.NRGBA{A: 0x16}
+	case theme.ColorNameShadow:
+		return color.NRGBA{A: 0x22}
+	case theme.ColorNameScrollBar:
+		return color.NRGBA{A: 0x3C}
 	case theme.ColorNameForeground:
 		return ink
-	case theme.ColorNamePlaceHolder:
-		return muted
+	case theme.ColorNamePlaceHolder, theme.ColorNameDisabled:
+		return faint
 	case theme.ColorNameError:
-		return coral
+		return red
 	case theme.ColorNameWarning:
-		return amber
+		return orange
 	case theme.ColorNameSuccess:
 		return green
 	case theme.ColorNameForegroundOnPrimary, theme.ColorNameForegroundOnError:
 		return white
-	case theme.ColorNameDisabledButton:
-		return sandDark
-	case theme.ColorNameDisabled:
-		return color.NRGBA{R: 0xA9, G: 0xB3, B: 0xBD, A: 0xFF}
 	}
 	return theme.DefaultTheme().Color(name, theme.VariantLight)
 }
@@ -86,31 +99,53 @@ func (caribeTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.DefaultTheme().Icon(name)
 }
 
-// Size returns the size of the theme called name: rounder corners and
-// bigger headings than the default theme.
+// Size returns the size of the theme called name: rounder corners, more
+// space inside widgets and large titles, as in Apple interfaces.
 func (caribeTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
-	case theme.SizeNameInputRadius, theme.SizeNameButtonRadius, theme.SizeNameSelectionRadius:
+	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius:
 		return 8
-	case theme.SizeNameCardRadius, theme.SizeNameDialogRadius:
-		return panelRadius
+	case theme.SizeNameButtonRadius:
+		return 10
+	case theme.SizeNameCardRadius, theme.SizeNameDialogRadius, theme.SizeNamePopupRadius:
+		return cardRadius
+	case theme.SizeNameInnerPadding:
+		return 10
+	case theme.SizeNameText:
+		return 14
+	case theme.SizeNameCaptionText:
+		return 12
 	case theme.SizeNameHeadingText:
-		return 26
+		return 30
 	case theme.SizeNameSubHeadingText:
-		return 18
+		return 17
 	}
 	return theme.DefaultTheme().Size(name)
 }
 
+// tint returns the opaque color c with alpha a, for soft backgrounds such
+// as the one of a pill.
+func tint(c color.Color, a uint8) color.Color {
+	r, g, b, _ := c.RGBA() // 16-bit channels; our colors are opaque
+	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: a}
+}
+
+// darker returns the opaque color c a quarter darker, so text over a tint
+// of c is still easy to read.
+func darker(c color.Color) color.Color {
+	r, g, b, _ := c.RGBA()
+	return color.NRGBA{R: uint8((r >> 8) * 3 / 4), G: uint8((g >> 8) * 3 / 4), B: uint8((b >> 8) * 3 / 4), A: 0xFF}
+}
+
 // stateColor returns the color that identifies patient state s in the GUI:
-// green when awake, amber when asleep in the hallway and indigo when asleep
-// in bed.
+// green when awake, orange (amber) when asleep in the hallway and indigo
+// when asleep in bed.
 func stateColor(s hospital.PatientState) color.Color {
 	switch s {
 	case hospital.Awake:
 		return green
 	case hospital.AsleepInHallway:
-		return amber
+		return orange
 	case hospital.AsleepInBed:
 		return indigo
 	default:
@@ -138,11 +173,11 @@ func stateLabel(s hospital.PatientState) string {
 func levelColor(l hospital.NarcolepsyLevel) color.Color {
 	switch l {
 	case hospital.Mild:
-		return slate
+		return caribe
 	case hospital.Moderate:
-		return amber
+		return orange
 	case hospital.Severe:
-		return coral
+		return red
 	default:
 		return gray
 	}

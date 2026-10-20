@@ -14,22 +14,25 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// panelRadius is the corner radius of panels, cards and dialogs.
-const panelRadius = 14
+// cardRadius is the corner radius of cards and dialogs.
+const cardRadius = 16
 
-// newPanel returns content over a white rounded rectangle with a thin
-// border: the card look used by every page.
+// newPanel returns content over a white rounded card with a very soft
+// shadow under it, the borderless card look of Apple interfaces.
 func newPanel(content fyne.CanvasObject) fyne.CanvasObject {
+	shadow := canvas.NewRectangle(color.NRGBA{A: 0x0F})
+	shadow.CornerRadius = cardRadius
 	bg := canvas.NewRectangle(white)
-	bg.CornerRadius = panelRadius
-	bg.StrokeColor = border
-	bg.StrokeWidth = 1
-	return container.NewStack(bg, padded(14, content))
+	bg.CornerRadius = cardRadius
+	// The shadow is the same card moved 2 pixels down, so only its bottom
+	// edge shows.
+	moved := container.New(layout.NewCustomPaddedLayout(2, -2, 0, 0), shadow)
+	return container.NewStack(moved, bg, padded(16, content))
 }
 
-// newTitledPanel returns a panel with a bold title over content.
+// newTitledPanel returns a card with a bold title over content.
 func newTitledPanel(title string, content fyne.CanvasObject) fyne.CanvasObject {
-	return newPanel(container.NewBorder(newHeading(title, theme.SizeNameSubHeadingText), nil, nil, nil, content))
+	return newPanel(container.NewBorder(padded(2, newHeading(title, theme.SizeNameSubHeadingText)), nil, nil, nil, content))
 }
 
 // padded returns content with the same padding p on its four sides.
@@ -52,7 +55,17 @@ func newCaption(text string) *canvas.Text {
 	return t
 }
 
-// pill is a small rounded label with a background color, used for states.
+// newSectionTitle returns a small bold gray title in capitals, used to
+// group items as in the sidebar of macOS.
+func newSectionTitle(text string) fyne.CanvasObject {
+	t := canvas.NewText(strings.ToUpper(text), faint)
+	t.TextSize = 11
+	t.TextStyle = fyne.TextStyle{Bold: true}
+	return container.New(layout.NewCustomPaddedLayout(10, 2, 8, 0), t)
+}
+
+// pill is a small capsule with a soft tint of a color and its text in a
+// darker shade of the same color, used for states.
 type pill struct {
 	bg   *canvas.Rectangle
 	text *canvas.Text
@@ -63,9 +76,9 @@ type pill struct {
 func newPill() *pill {
 	p := &pill{
 		bg:   canvas.NewRectangle(color.Transparent),
-		text: canvas.NewText("", white),
+		text: canvas.NewText("", ink),
 	}
-	p.bg.CornerRadius = 10
+	p.bg.CornerRadius = 11
 	p.text.TextSize = theme.CaptionTextSize()
 	p.text.TextStyle = fyne.TextStyle{Bold: true}
 	inner := container.New(layout.NewCustomPaddedLayout(3, 3, 10, 10), p.text)
@@ -74,15 +87,17 @@ func newPill() *pill {
 	return p
 }
 
-// set shows text over color c. Refreshing the box also recalculates the
-// layout, because the pill grows or shrinks with its text.
+// set shows text with the colors of c. Refreshing the box also recalculates
+// the layout, because the pill grows or shrinks with its text.
 func (p *pill) set(text string, c color.Color) {
 	p.text.Text = text
-	p.bg.FillColor = c
+	p.text.Color = darker(c)
+	p.bg.FillColor = tint(c, 0x26)
 	p.box.Refresh()
 }
 
-// avatar is a colored circle with the initials of a person.
+// avatar is a circle with the initials of a person, in a soft tint of a
+// color chosen from their ID.
 type avatar struct {
 	circle *canvas.Circle
 	text   *canvas.Text
@@ -92,26 +107,28 @@ type avatar struct {
 // newAvatar returns an empty avatar of size x size pixels.
 func newAvatar(size float32) *avatar {
 	a := &avatar{
-		circle: canvas.NewCircle(turquoise),
-		text:   canvas.NewText("", white),
+		circle: canvas.NewCircle(fillGray),
+		text:   canvas.NewText("", ink),
 	}
-	a.text.TextSize = size * 0.38
+	a.text.TextSize = size * 0.36
 	a.text.TextStyle = fyne.TextStyle{Bold: true}
 	circle := container.NewStack(a.circle, container.NewCenter(a.text))
 	a.box = container.NewCenter(container.NewGridWrap(fyne.NewSize(size, size), circle))
 	return a
 }
 
-// set shows the initials of name over a color chosen from id, so the same
+// set shows the initials of name in the color chosen from id, so the same
 // person always gets the same color.
 func (a *avatar) set(name, id string) {
+	c := avatarColor(id)
 	a.text.Text = initials(name)
-	a.circle.FillColor = avatarColor(id)
+	a.text.Color = darker(c)
+	a.circle.FillColor = tint(c, 0x2E)
 	a.box.Refresh()
 }
 
 // avatarColors are the colors an avatar can get.
-var avatarColors = []color.Color{turquoise, coral, indigo, amber, deepSea, green}
+var avatarColors = []color.Color{caribe, orange, indigo, green, pink, sky}
 
 // avatarColor picks one of avatarColors from id: it adds up its characters
 // and keeps the remainder, so the result is always the same for one id.
@@ -123,7 +140,17 @@ func avatarColor(id string) color.Color {
 	return avatarColors[sum%len(avatarColors)]
 }
 
-// statCard is a panel with a colored icon, a big number and a caption.
+// newIconBadge returns icon in white over a rounded square of color c, like
+// the icons of the Settings app of Apple.
+func newIconBadge(icon fyne.Resource, c color.Color, size float32) fyne.CanvasObject {
+	bg := canvas.NewRectangle(c)
+	bg.CornerRadius = size * 0.26
+	ic := widget.NewIcon(theme.NewColoredResource(icon, theme.ColorNameForegroundOnPrimary))
+	return container.NewGridWrap(fyne.NewSize(size, size), container.NewStack(bg, padded(size*0.12, ic)))
+}
+
+// statCard is a card with a colored icon, a big number and a caption, in
+// the style of the widgets of Apple.
 type statCard struct {
 	value *canvas.Text
 	box   fyne.CanvasObject // what is added to a layout
@@ -131,16 +158,12 @@ type statCard struct {
 
 // newStatCard returns a stat card with caption and icon over color c.
 func newStatCard(caption string, icon fyne.Resource, c color.Color) *statCard {
-	circle := canvas.NewCircle(c)
-	ic := widget.NewIcon(theme.NewColoredResource(icon, theme.ColorNameForegroundOnPrimary))
-	badge := container.NewGridWrap(fyne.NewSize(44, 44), container.NewStack(circle, padded(10, ic)))
-
 	value := canvas.NewText("0", ink)
 	value.TextSize = 26
 	value.TextStyle = fyne.TextStyle{Bold: true}
-	text := container.NewVBox(value, newCaption(caption))
 
-	box := newPanel(container.NewBorder(nil, nil, container.NewCenter(badge), nil, padded(4, text)))
+	text := container.New(layout.NewCustomPaddedLayout(0, 0, 12, 0), container.NewVBox(value, newCaption(caption)))
+	box := newPanel(container.NewBorder(nil, nil, container.NewCenter(newIconBadge(icon, c, 38)), nil, text))
 	return &statCard{value: value, box: box}
 }
 
@@ -148,6 +171,59 @@ func newStatCard(caption string, icon fyne.Resource, c color.Color) *statCard {
 func (s *statCard) set(n int) {
 	s.value.Text = strconv.Itoa(n)
 	s.value.Refresh()
+}
+
+// newInfoRow returns one row of a grouped list, as in the Settings app: the
+// caption in gray on the left and value on the right.
+func newInfoRow(caption string, value *widget.Label) fyne.CanvasObject {
+	value.Alignment = fyne.TextAlignTrailing
+	value.TextStyle = fyne.TextStyle{Bold: true}
+	label := widget.NewLabel(caption)
+	label.Importance = widget.LowImportance
+	return container.NewBorder(nil, nil, label, nil, value)
+}
+
+// newGroupedList returns rows inside a gray rounded box, with a hairline
+// between them, like an inset grouped list of iOS.
+func newGroupedList(rows ...fyne.CanvasObject) fyne.CanvasObject {
+	list := container.NewVBox()
+	for i, r := range rows {
+		if i > 0 {
+			list.Add(widget.NewSeparator())
+		}
+		list.Add(r)
+	}
+	bg := canvas.NewRectangle(canvasGray)
+	bg.CornerRadius = 12
+	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(4, 4, 10, 10), list))
+}
+
+// newSegmented returns a segmented control: one button per label inside a
+// gray rounded track. Tapping a segment highlights it and calls onSelect
+// with its index. The first segment starts selected.
+func newSegmented(labels []string, onSelect func(i int)) fyne.CanvasObject {
+	buttons := make([]*widget.Button, len(labels))
+	choose := func(i int) {
+		for j, b := range buttons {
+			b.Importance = widget.LowImportance
+			if j == i {
+				b.Importance = widget.HighImportance
+			}
+			b.Refresh()
+		}
+		onSelect(i)
+	}
+
+	row := container.NewGridWithColumns(len(labels))
+	for i, l := range labels {
+		buttons[i] = widget.NewButton(l, func() { choose(i) })
+		row.Add(buttons[i])
+	}
+	choose(0)
+
+	track := canvas.NewRectangle(fillGray)
+	track.CornerRadius = 12
+	return container.NewStack(track, padded(3, row))
 }
 
 // initials returns the first letter of the first two words of name in upper

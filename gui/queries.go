@@ -9,6 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -16,8 +17,8 @@ import (
 )
 
 // queriesView is the Queries page: the four queries of the assignment, one
-// per inner tab. Inner tabs are used instead of an accordion because a list
-// or a table inside an accordion only gets the height of one row.
+// per segment of a segmented control. Each query gets the whole height of
+// the page; inside an accordion a list or a table only gets one row.
 type queriesView struct {
 	a *App
 
@@ -83,18 +84,29 @@ func newQueriesPage(a *App) page {
 
 	a.addRefresher(v.refresh)
 
-	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Pacientes en el pasillo", theme.WarningIcon(), v.hallwayList),
-		container.NewTabItemWithIcon("Episodios por doctor", theme.AccountIcon(),
-			container.NewBorder(padded(4, v.doctorSelect), nil, nil, nil, v.episodesList)),
-		container.NewTabItemWithIcon("Asignación de cuarto", theme.HomeIcon(), container.NewVBox(padded(4, v.assignment))),
-		container.NewTabItemWithIcon("Reporte de severidad", theme.InfoIcon(), v.reportTable),
+	// One view per query; the segmented control shows one at a time, the
+	// same way the sidebar shows one page at a time.
+	views := []fyne.CanvasObject{
+		v.hallwayList,
+		container.NewBorder(padded(4, v.doctorSelect), nil, nil, nil, v.episodesList),
+		container.NewVBox(padded(4, v.assignment)),
+		v.reportTable,
+	}
+	body := container.NewStack()
+	segments := newSegmented(
+		[]string{"Pacientes en el pasillo", "Episodios por doctor", "Asignación de cuarto", "Reporte de severidad"},
+		func(i int) {
+			body.Objects = []fyne.CanvasObject{views[i]}
+			body.Refresh()
+		},
 	)
 	return page{
+		section:  "Registro",
 		title:    "Consultas",
-		subtitle: "Las cuatro consultas del enunciado, siempre al día",
+		subtitle: "Las cuatro consultas del enunciado, al día",
 		icon:     theme.SearchIcon(),
-		content:  newPanel(tabs),
+		color:    orange,
+		content:  newPanel(container.NewBorder(container.New(layout.NewCustomPaddedLayout(0, 12, 0, 0), segments), nil, nil, nil, body)),
 	}
 }
 

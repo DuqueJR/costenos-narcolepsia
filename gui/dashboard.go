@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -17,13 +19,17 @@ const recentEpisodes = 5
 // newDashboardPage builds the Home page of app a: a welcome banner, the bed
 // occupancy, the staff, quick actions and the last episodes.
 func newDashboardPage(a *App) page {
+	date := canvas.NewText("", white)
+	date.TextSize = 13
+	date.TextStyle = fyne.TextStyle{Bold: true}
+
 	beds := widget.NewProgressBar()
 	bedsText := newCaption("")
-	occupancy := newTitledPanel("Ocupación de camas", container.NewVBox(beds, padded(4, bedsText)))
+	occupancy := newTitledPanel("Ocupación de camas", container.NewVBox(padded(2, beds), bedsText))
 
 	doctors := newHeading("0", theme.SizeNameHeadingText)
 	orderlies := newHeading("0", theme.SizeNameHeadingText)
-	staff := newTitledPanel("Personal", container.NewGridWithColumns(2,
+	staff := newTitledPanel("Personal de turno", container.NewGridWithColumns(2,
 		container.NewVBox(doctors, padded(4, newCaption("Doctores"))),
 		container.NewVBox(orderlies, padded(4, newCaption("Camilleros"))),
 	))
@@ -39,6 +45,9 @@ func newDashboardPage(a *App) page {
 	last := newTitledPanel("Últimos episodios", recent)
 
 	a.addRefresher(func() {
+		date.Text = spanishDate(time.Now())
+		date.Refresh()
+
 		used, total := 0, 0
 		for _, r := range a.h.Rooms() {
 			used += len(r.Occupants())
@@ -59,7 +68,7 @@ func newDashboardPage(a *App) page {
 		slices.Reverse(history)
 		recent.RemoveAll()
 		if len(history) == 0 {
-			recent.Add(padded(4, newCaption("Todavía no hay episodios. Registra uno desde Pacientes.")))
+			recent.Add(padded(4, newCaption("Todo tranquilo, como domingo en la playa. Registra un episodio desde Pacientes.")))
 		}
 		for _, rec := range history[:min(len(history), recentEpisodes)] {
 			line := widget.NewLabel(rec.Summary())
@@ -71,27 +80,30 @@ func newDashboardPage(a *App) page {
 	})
 
 	content := container.NewVBox(
-		newBanner(),
+		newBanner(date),
 		container.NewGridWithColumns(2, occupancy, staff),
 		container.NewGridWithColumns(2, quick, last),
 	)
 	return page{
+		section:  "Hospital",
 		title:    "Inicio",
-		subtitle: "Resumen del hospital en este momento",
+		subtitle: "¿Qué más pues? Así va el hospital hoy",
 		icon:     theme.GridIcon(),
+		color:    caribe,
 		content:  container.NewVScroll(content),
 	}
 }
 
-// newBanner returns the turquoise welcome banner of the dashboard.
-func newBanner() fyne.CanvasObject {
-	bg := canvas.NewHorizontalGradient(turquoise, deepSea)
-
-	title := canvas.NewText("Hospital de los Costeños con Narcolepsia", white)
-	title.TextSize = 24
+// newBanner returns the welcome banner: the Caribbean sea drawn by
+// seaPixel, today's date, a greeting and a vueltiao stripe under it.
+func newBanner(date *canvas.Text) fyne.CanvasObject {
+	title := canvas.NewText("¡Ajá, bienvenido al hospital!", white)
+	title.TextSize = 26
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	line := canvas.NewText("Aquí nadie se queda dormido sin que lo atiendan, ni en el pasillo.", white)
+	line := canvas.NewText("Hospital de los Costeños con Narcolepsia · Costa Caribe", white)
 	line.TextSize = 14
 
-	return container.NewStack(bg, padded(22, container.NewVBox(title, line)))
+	text := container.NewVBox(date, title, line,
+		container.New(layout.NewCustomPaddedLayout(8, 0, 0, 0), container.NewHBox(newVueltiaoBand(160, 12))))
+	return container.NewStack(newSeaBanner(), container.New(layout.NewCustomPaddedLayout(26, 30, 28, 28), text))
 }

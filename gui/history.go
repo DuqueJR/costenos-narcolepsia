@@ -20,9 +20,11 @@ func newHistoryPage(a *App) page {
 		list.Refresh()
 	})
 	return page{
+		section:  "Registro",
 		title:    "Historial",
-		subtitle: "Todos los episodios, del más reciente al más antiguo",
+		subtitle: "Todo lo que ha pasado, de lo más nuevo a lo más viejo",
 		icon:     theme.HistoryIcon(),
+		color:    gray,
 		content:  newPanel(list),
 	}
 }

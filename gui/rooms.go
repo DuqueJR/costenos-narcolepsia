@@ -26,9 +26,11 @@ func newRoomsPage(a *App) page {
 		grid.Refresh()
 	})
 	return page{
+		section:  "Hospital",
 		title:    "Cuartos",
-		subtitle: "Camas de cada cuarto y quién está durmiendo en ellas",
+		subtitle: "Camas listas pa' cuando a alguien le pique el sueño",
 		icon:     theme.HomeIcon(),
+		color:    green,
 		actions: []fyne.CanvasObject{
 			newActionButton("Agregar cuarto", theme.ContentAddIcon(), widget.HighImportance, a.showAddRoomForm),
 		},
@@ -54,7 +56,7 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 
 	people := container.NewVBox()
 	if len(occupants) == 0 {
-		people.Add(padded(6, newCaption("Sin pacientes: listo para recibir a alguien")))
+		people.Add(padded(6, newCaption("Libre, esperando al próximo dormilón")))
 	}
 	for _, p := range occupants {
 		face := newAvatar(30)
@@ -64,9 +66,8 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 	}
 
 	return newPanel(container.NewVBox(
-		container.NewBorder(nil, nil, nil, state.box, title),
-		beds,
-		widget.NewSeparator(),
+		container.NewBorder(nil, nil, newIconBadge(theme.HomeIcon(), roomStateColor(r.State()), 30), state.box, title),
+		padded(2, beds),
 		people,
 	))
 }
