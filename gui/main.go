@@ -33,7 +33,7 @@ func main() {
 func newPages(a *App) []page {
 	return []page{
 		newPatientsPage(a),
-		{title: "Cuartos", subtitle: "Camas y ocupantes", icon: theme.HomeIcon(), content: newRoomsTab(a)},
+		newRoomsPage(a),
 		{title: "Consultas", subtitle: "Las cuatro consultas del enunciado", icon: theme.SearchIcon(), content: newQueriesTab(a)},
 		{title: "Historial", subtitle: "Episodios del más reciente al más antiguo", icon: theme.HistoryIcon(), content: newHistoryTab(a)},
 		newMusicPage(),

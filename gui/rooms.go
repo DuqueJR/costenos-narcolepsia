@@ -1,55 +1,72 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
-	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"costenos-narcolepsia/hospital"
 )
 
-// newRoomsTab builds the Rooms tab of app a: a grid of 3 columns with one
-// card per room. The GUI never adds rooms, so the cards are built once and
-// each one registers a refresher that updates its state and occupants.
-func newRoomsTab(a *App) fyne.CanvasObject {
+// newRoomsPage builds the Rooms page of app a: a grid of 3 columns with one
+// card per room. Rooms can be added from the GUI, so the refresher builds
+// the cards again every time; with a few rooms that is simpler than keeping
+// each card and updating it.
+func newRoomsPage(a *App) page {
 	grid := container.NewGridWithColumns(3)
-	for _, r := range a.h.Rooms() {
-		grid.Add(newRoomCard(a, r))
-	}
-	return container.NewVScroll(grid)
-}
-
-// newRoomCard builds the card of room r and registers its refresher in a.
-func newRoomCard(a *App, r *hospital.Room) fyne.CanvasObject {
-	capacity := widget.NewLabel("Capacidad: " + strconv.Itoa(r.Capacity()) + " cama(s)")
-	state := canvas.NewText("", nil)
-	state.TextStyle = fyne.TextStyle{Bold: true}
-	occupants := widget.NewLabel("")
-
 	a.addRefresher(func() {
-		state.Text = r.State().String()
-		state.Color = roomStateColor(r.State())
-		state.Refresh()
-		occupants.SetText(occupantsText(r.Occupants()))
+		grid.RemoveAll()
+		for _, r := range a.h.Rooms() {
+			grid.Add(newRoomCard(r))
+		}
+		grid.Refresh()
 	})
-
-	title := "Cuarto " + strconv.Itoa(r.Number())
-	return widget.NewCard(title, "", container.NewVBox(capacity, state, occupants))
+	return page{
+		title:    "Cuartos",
+		subtitle: "Camas de cada cuarto y quién está durmiendo en ellas",
+		icon:     theme.HomeIcon(),
+		actions: []fyne.CanvasObject{
+			newActionButton("Agregar cuarto", theme.ContentAddIcon(), widget.HighImportance, a.showAddRoomForm),
+		},
+		content: container.NewVScroll(container.NewVBox(grid)),
+	}
 }
 
-// occupantsText returns the names of the patients in a room, or "Libre" if
-// it is empty.
-func occupantsText(occupants []*hospital.Patient) string {
+// newRoomCard builds the card of room r: its number and state, a bar with
+// the beds in use and the patients sleeping in it.
+func newRoomCard(r *hospital.Room) fyne.CanvasObject {
+	occupants := r.Occupants()
+
+	state := newPill()
+	state.set(roomStateLabel(r.State()), roomStateColor(r.State()))
+	title := newHeading("Cuarto "+strconv.Itoa(r.Number()), theme.SizeNameSubHeadingText)
+
+	beds := widget.NewProgressBar()
+	beds.Max = float64(r.Capacity())
+	beds.TextFormatter = func() string {
+		return fmt.Sprintf("%d de %d camas ocupadas", len(occupants), r.Capacity())
+	}
+	beds.SetValue(float64(len(occupants)))
+
+	people := container.NewVBox()
 	if len(occupants) == 0 {
-		return "Libre"
+		people.Add(padded(6, newCaption("Sin pacientes: listo para recibir a alguien")))
 	}
-	names := make([]string, 0, len(occupants))
 	for _, p := range occupants {
-		names = append(names, p.Name())
+		face := newAvatar(30)
+		face.set(p.Name(), p.ID())
+		name := widget.NewLabelWithStyle(p.Name(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		people.Add(container.NewBorder(nil, nil, face.box, nil, container.NewHBox(name, container.NewCenter(newCaption(p.ID())))))
 	}
-	return "Ocupante: " + strings.Join(names, ", ")
+
+	return newPanel(container.NewVBox(
+		container.NewBorder(nil, nil, nil, state.box, title),
+		beds,
+		widget.NewSeparator(),
+		people,
+	))
 }
