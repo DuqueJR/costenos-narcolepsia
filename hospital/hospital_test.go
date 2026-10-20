@@ -256,3 +256,120 @@ func TestOrderlyAttendAwakePatient(t *testing.T) {
 		t.Errorf("Attended() = %d, want 0", o.Attended())
 	}
 }
+
+func TestHospitalAdmitPatientDuplicate(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	if err := h.AdmitPatient(newTestPatient(t, "P1")); err != nil {
+		t.Fatalf("first AdmitPatient error: %v", err)
+	}
+
+	err := h.AdmitPatient(newTestPatient(t, "P1"))
+	if !errors.Is(err, ErrDuplicateID) {
+		t.Errorf("AdmitPatient duplicate error = %v, want %v", err, ErrDuplicateID)
+	}
+	if n := len(h.Patients()); n != 1 {
+		t.Errorf("len(Patients()) = %d, want 1", n)
+	}
+}
+
+func TestHospitalHireStaffDuplicate(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	if err := h.HireDoctor(newTestDoctor(t, "S-01")); err != nil {
+		t.Fatalf("HireDoctor error: %v", err)
+	}
+
+	// An orderly with the ID of a doctor is a duplicate: IDs are unique
+	// across the whole staff.
+	err := h.HireStaff(newTestOrderly(t, "S-01"))
+	if !errors.Is(err, ErrDuplicateID) {
+		t.Errorf("HireStaff duplicate error = %v, want %v", err, ErrDuplicateID)
+	}
+	if n := len(h.Staff()); n != 1 {
+		t.Errorf("len(Staff()) = %d, want 1", n)
+	}
+}
+
+func TestHospitalAddRoomDuplicate(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	if err := h.AddRoom(newTestRoom(t, 101, 1)); err != nil {
+		t.Fatalf("first AddRoom error: %v", err)
+	}
+
+	err := h.AddRoom(newTestRoom(t, 101, 2))
+	if !errors.Is(err, ErrDuplicateID) {
+		t.Errorf("AddRoom duplicate error = %v, want %v", err, ErrDuplicateID)
+	}
+	if n := len(h.Rooms()); n != 1 {
+		t.Errorf("len(Rooms()) = %d, want 1", n)
+	}
+}
+
+func TestHospitalNilData(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"AdmitPatient", h.AdmitPatient(nil)},
+		{"HireStaff", h.HireStaff(nil)},
+		{"HireDoctor", h.HireDoctor(nil)},
+		{"AddRoom", h.AddRoom(nil)},
+	}
+	for _, tt := range tests {
+		if !errors.Is(tt.err, ErrInvalidData) {
+			t.Errorf("%s(nil) error = %v, want %v", tt.name, tt.err, ErrInvalidData)
+		}
+	}
+}
+
+func TestHospitalFindPatientNotFound(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	if err := h.AdmitPatient(newTestPatient(t, "P1")); err != nil {
+		t.Fatalf("AdmitPatient error: %v", err)
+	}
+
+	p, err := h.FindPatient("P-999")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindPatient error = %v, want %v", err, ErrNotFound)
+	}
+	if p != nil {
+		t.Errorf("FindPatient patient = %v, want nil", p)
+	}
+}
+
+func TestHospitalHireDoctorAndFind(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	d := newTestDoctor(t, "D-01")
+	if err := h.HireDoctor(d); err != nil {
+		t.Fatalf("HireDoctor error: %v", err)
+	}
+	if err := h.HireStaff(newTestOrderly(t, "O-01")); err != nil {
+		t.Fatalf("HireStaff error: %v", err)
+	}
+
+	if got, err := h.FindDoctor("D-01"); err != nil || got != d {
+		t.Errorf("FindDoctor = %v, %v, want doctor D-01", got, err)
+	}
+	if _, err := h.FindDoctor("O-01"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindDoctor(orderly) error = %v, want %v", err, ErrNotFound)
+	}
+	if n := len(h.Staff()); n != 2 {
+		t.Errorf("len(Staff()) = %d, want 2", n)
+	}
+	if n := len(h.Doctors()); n != 1 {
+		t.Errorf("len(Doctors()) = %d, want 1", n)
+	}
+}
+
+func TestHospitalGettersReturnCopies(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	if err := h.AdmitPatient(newTestPatient(t, "P1")); err != nil {
+		t.Fatalf("AdmitPatient error: %v", err)
+	}
+
+	patients := h.Patients()
+	patients[0] = nil
+	if h.Patients()[0] == nil {
+		t.Error("changing the slice from Patients() changed the hospital")
+	}
+}
