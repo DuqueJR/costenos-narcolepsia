@@ -1,0 +1,27 @@
+package main
+
+import (
+	"slices"
+)
+
+// newHistoryPage builds the History page of app a: the Summary of every
+// episode of the hospital, from the newest to the oldest.
+func newHistoryPage(a *App) page {
+	var lines []string
+	list := newTextList(func() []string { return lines })
+
+	a.addRefresher(func() {
+		// History returns a copy, so reversing it does not change the hospital.
+		history := a.h.History()
+		slices.Reverse(history)
+		lines = orNone(summaries(history))
+		list.Refresh()
+	})
+	return page{
+		section:  "Registro",
+		title:    "Historial",
+		subtitle: "Todo lo que ha pasado, de lo más nuevo a lo más viejo",
+		icon:     icon("clock-counter-clockwise"),
+		content:  newPanel(list),
+	}
+}
