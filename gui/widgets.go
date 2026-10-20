@@ -9,25 +9,24 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 // cardRadius is the corner radius of cards and dialogs.
-const cardRadius = 16
+const cardRadius = 12
 
-// newPanel returns content over a white rounded card with a very soft
-// shadow under it, the borderless card look of Apple interfaces.
+// newPanel returns content over a white rounded card with a thin gray
+// border. Cards are separated from the gray window by their color and that
+// hairline, not by colored shadows.
 func newPanel(content fyne.CanvasObject) fyne.CanvasObject {
-	shadow := canvas.NewRectangle(color.NRGBA{A: 0x0F})
-	shadow.CornerRadius = cardRadius
 	bg := canvas.NewRectangle(white)
 	bg.CornerRadius = cardRadius
-	// The shadow is the same card moved 2 pixels down, so only its bottom
-	// edge shows.
-	moved := container.New(layout.NewCustomPaddedLayout(2, -2, 0, 0), shadow)
-	return container.NewStack(moved, bg, padded(16, content))
+	bg.StrokeColor = hairline
+	bg.StrokeWidth = 1
+	return container.NewStack(bg, padded(16, content))
 }
 
 // newTitledPanel returns a card with a bold title over content.
@@ -55,19 +54,20 @@ func newCaption(text string) *canvas.Text {
 	return t
 }
 
-// newSectionTitle returns a small bold gray title in capitals, used to
-// group items as in the sidebar of macOS.
+// newSectionTitle returns a small bold gray title, used to group items as in
+// the sidebar of macOS.
 func newSectionTitle(text string) fyne.CanvasObject {
-	t := canvas.NewText(strings.ToUpper(text), faint)
+	t := canvas.NewText(text, faint)
 	t.TextSize = 11
 	t.TextStyle = fyne.TextStyle{Bold: true}
-	return container.New(layout.NewCustomPaddedLayout(10, 2, 8, 0), t)
+	return container.New(layout.NewCustomPaddedLayout(12, 4, 10, 0), t)
 }
 
-// pill is a small capsule with a soft tint of a color and its text in a
-// darker shade of the same color, used for states.
+// pill shows a state as macOS Mail or Reminders do: a small colored dot and
+// gray text. The color lives only in the dot, so a list full of states
+// stays calm.
 type pill struct {
-	bg   *canvas.Rectangle
+	dot  *canvas.Circle
 	text *canvas.Text
 	box  *fyne.Container // what is added to a layout
 }
@@ -75,95 +75,62 @@ type pill struct {
 // newPill returns an empty pill, ready to be filled with set.
 func newPill() *pill {
 	p := &pill{
-		bg:   canvas.NewRectangle(color.Transparent),
-		text: canvas.NewText("", ink),
+		dot:  canvas.NewCircle(gray),
+		text: canvas.NewText("", muted),
 	}
-	p.bg.CornerRadius = 11
 	p.text.TextSize = theme.CaptionTextSize()
-	p.text.TextStyle = fyne.TextStyle{Bold: true}
-	inner := container.New(layout.NewCustomPaddedLayout(3, 3, 10, 10), p.text)
+	dot := container.NewCenter(container.NewGridWrap(fyne.NewSize(7, 7), p.dot))
 	// Center keeps the pill at its own height inside rows that are taller.
-	p.box = container.NewCenter(container.NewStack(p.bg, inner))
+	p.box = container.NewCenter(container.NewHBox(dot, p.text))
 	return p
 }
 
-// set shows text with the colors of c. Refreshing the box also recalculates
-// the layout, because the pill grows or shrinks with its text.
+// set shows text with a dot of color c. Refreshing the box also
+// recalculates the layout, because the pill grows or shrinks with its text.
 func (p *pill) set(text string, c color.Color) {
 	p.text.Text = text
-	p.text.Color = darker(c)
-	p.bg.FillColor = tint(c, 0x26)
+	p.dot.FillColor = c
 	p.box.Refresh()
 }
 
-// avatar is a circle with the initials of a person, in a soft tint of a
-// color chosen from their ID.
+// avatar is a gray circle with the initials of a person in white, like the
+// monograms of the Contacts app.
 type avatar struct {
-	circle *canvas.Circle
-	text   *canvas.Text
-	box    *fyne.Container // what is added to a layout
+	text *canvas.Text
+	box  *fyne.Container // what is added to a layout
 }
 
 // newAvatar returns an empty avatar of size x size pixels.
 func newAvatar(size float32) *avatar {
-	a := &avatar{
-		circle: canvas.NewCircle(fillGray),
-		text:   canvas.NewText("", ink),
-	}
-	a.text.TextSize = size * 0.36
+	a := &avatar{text: canvas.NewText("", white)}
+	a.text.TextSize = size * 0.38
 	a.text.TextStyle = fyne.TextStyle{Bold: true}
-	circle := container.NewStack(a.circle, container.NewCenter(a.text))
+	circle := container.NewStack(canvas.NewCircle(monogram), container.NewCenter(a.text))
 	a.box = container.NewCenter(container.NewGridWrap(fyne.NewSize(size, size), circle))
 	return a
 }
 
-// set shows the initials of name in the color chosen from id, so the same
-// person always gets the same color.
-func (a *avatar) set(name, id string) {
-	c := avatarColor(id)
+// set shows the initials of name.
+func (a *avatar) set(name string) {
 	a.text.Text = initials(name)
-	a.text.Color = darker(c)
-	a.circle.FillColor = tint(c, 0x2E)
 	a.box.Refresh()
 }
 
-// avatarColors are the colors an avatar can get.
-var avatarColors = []color.Color{caribe, orange, indigo, green, pink, sky}
-
-// avatarColor picks one of avatarColors from id: it adds up its characters
-// and keeps the remainder, so the result is always the same for one id.
-func avatarColor(id string) color.Color {
-	sum := 0
-	for _, r := range id {
-		sum += int(r)
-	}
-	return avatarColors[sum%len(avatarColors)]
-}
-
-// newIconBadge returns icon in white over a rounded square of color c, like
-// the icons of the Settings app of Apple.
-func newIconBadge(icon fyne.Resource, c color.Color, size float32) fyne.CanvasObject {
-	bg := canvas.NewRectangle(c)
-	bg.CornerRadius = size * 0.26
-	ic := widget.NewIcon(theme.NewColoredResource(icon, theme.ColorNameForegroundOnPrimary))
-	return container.NewGridWrap(fyne.NewSize(size, size), container.NewStack(bg, padded(size*0.12, ic)))
-}
-
-// statCard is a card with a colored icon, a big number and a caption, in
-// the style of the widgets of Apple.
+// statCard is a card with a caption over a big number.
 type statCard struct {
 	value *canvas.Text
 	box   fyne.CanvasObject // what is added to a layout
 }
 
-// newStatCard returns a stat card with caption and icon over color c.
-func newStatCard(caption string, icon fyne.Resource, c color.Color) *statCard {
+// newStatCard returns a stat card with caption and a dot of color c, the
+// only color of the card.
+func newStatCard(caption string, c color.Color) *statCard {
 	value := canvas.NewText("0", ink)
-	value.TextSize = 26
+	value.TextSize = 28
 	value.TextStyle = fyne.TextStyle{Bold: true}
-
-	text := container.New(layout.NewCustomPaddedLayout(0, 0, 12, 0), container.NewVBox(value, newCaption(caption)))
-	box := newPanel(container.NewBorder(nil, nil, container.NewCenter(newIconBadge(icon, c, 38)), nil, text))
+	label := newPill()
+	label.set(caption, c)
+	box := newPanel(container.NewVBox(container.NewHBox(label.box), value))
 	return &statCard{value: value, box: box}
 }
 
@@ -177,14 +144,13 @@ func (s *statCard) set(n int) {
 // caption in gray on the left and value on the right.
 func newInfoRow(caption string, value *widget.Label) fyne.CanvasObject {
 	value.Alignment = fyne.TextAlignTrailing
-	value.TextStyle = fyne.TextStyle{Bold: true}
 	label := widget.NewLabel(caption)
 	label.Importance = widget.LowImportance
 	return container.NewBorder(nil, nil, label, nil, value)
 }
 
-// newGroupedList returns rows inside a gray rounded box, with a hairline
-// between them, like an inset grouped list of iOS.
+// newGroupedList returns rows inside a light gray rounded box, with a
+// hairline between them, like an inset grouped list of iOS.
 func newGroupedList(rows ...fyne.CanvasObject) fyne.CanvasObject {
 	list := container.NewVBox()
 	for i, r := range rows {
@@ -193,37 +159,92 @@ func newGroupedList(rows ...fyne.CanvasObject) fyne.CanvasObject {
 		}
 		list.Add(r)
 	}
-	bg := canvas.NewRectangle(canvasGray)
-	bg.CornerRadius = 12
-	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(4, 4, 10, 10), list))
+	bg := canvas.NewRectangle(fieldGray)
+	bg.CornerRadius = 10
+	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 10, 10), list))
 }
 
-// newSegmented returns a segmented control: one button per label inside a
-// gray rounded track. Tapping a segment highlights it and calls onSelect
-// with its index. The first segment starts selected.
+// newSegmented returns a segmented control as macOS draws it: the options
+// over a gray track, and the chosen one on a white rounded piece. Tapping an
+// option chooses it and calls onSelect with its index. The first option
+// starts chosen.
 func newSegmented(labels []string, onSelect func(i int)) fyne.CanvasObject {
-	buttons := make([]*widget.Button, len(labels))
+	segments := make([]*segment, len(labels))
 	choose := func(i int) {
-		for j, b := range buttons {
-			b.Importance = widget.LowImportance
-			if j == i {
-				b.Importance = widget.HighImportance
-			}
-			b.Refresh()
+		for j, s := range segments {
+			s.setSelected(j == i)
 		}
 		onSelect(i)
 	}
 
 	row := container.NewGridWithColumns(len(labels))
 	for i, l := range labels {
-		buttons[i] = widget.NewButton(l, func() { choose(i) })
-		row.Add(buttons[i])
+		segments[i] = newSegment(l, func() { choose(i) })
+		row.Add(segments[i])
 	}
 	choose(0)
 
 	track := canvas.NewRectangle(fillGray)
-	track.CornerRadius = 12
-	return container.NewStack(track, padded(3, row))
+	track.CornerRadius = 9
+	return container.NewStack(track, padded(2, row))
+}
+
+// segment is one option of a segmented control. It is a small widget so it
+// can be tapped and show the hand cursor.
+type segment struct {
+	widget.BaseWidget
+	bg    *canvas.Rectangle
+	label *canvas.Text
+	onTap func()
+}
+
+// Compile-time checks: the build fails if segment stops reacting to taps or
+// stops showing the hand cursor.
+var (
+	_ fyne.Tappable      = (*segment)(nil)
+	_ desktop.Cursorable = (*segment)(nil)
+)
+
+// newSegment returns an option with title that runs onTap when tapped.
+func newSegment(title string, onTap func()) *segment {
+	s := &segment{bg: canvas.NewRectangle(color.Transparent), label: canvas.NewText(title, muted), onTap: onTap}
+	s.bg.CornerRadius = 7
+	s.label.TextSize = 13
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+// CreateRenderer lays out the option: its title centered over the piece.
+func (s *segment) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(container.NewStack(s.bg,
+		container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), container.NewCenter(s.label))))
+}
+
+// setSelected puts the option on a white piece with a hairline border when
+// on is true.
+func (s *segment) setSelected(on bool) {
+	s.bg.FillColor = color.Transparent
+	s.bg.StrokeWidth = 0
+	s.label.Color = muted
+	s.label.TextStyle = fyne.TextStyle{}
+	if on {
+		s.bg.FillColor = white
+		s.bg.StrokeColor = hairline
+		s.bg.StrokeWidth = 1
+		s.label.Color = ink
+		s.label.TextStyle = fyne.TextStyle{Bold: true}
+	}
+	s.Refresh()
+}
+
+// Tapped chooses the option.
+func (s *segment) Tapped(*fyne.PointEvent) {
+	s.onTap()
+}
+
+// Cursor shows a hand over the option.
+func (s *segment) Cursor() desktop.Cursor {
+	return desktop.PointerCursor
 }
 
 // initials returns the first letter of the first two words of name in upper

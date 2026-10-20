@@ -8,7 +8,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 )
 
 // reduceMotion makes every spring jump straight to its end. Fyne cannot read
@@ -146,8 +145,7 @@ const toastTime = 2600 * time.Millisecond
 func newToaster() *toaster {
 	t := &toaster{text: canvas.NewText("", ink), hidden: 120}
 	t.text.TextStyle = fyne.TextStyle{Bold: true}
-	icon := newIconBadge(theme.ConfirmIcon(), green, 26)
-	banner := newPanel(container.NewHBox(icon, container.NewCenter(t.text)))
+	banner := newPanel(container.NewHBox(newAppIcon(28), container.NewCenter(t.text)))
 	t.slide = newSlider(container.NewBorder(nil, container.NewCenter(banner), nil, nil))
 	t.slide.jump(t.hidden)
 	t.layer = container.New(layout.NewCustomPaddedLayout(0, 24, 0, 0), t.slide.box)

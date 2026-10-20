@@ -24,7 +24,6 @@ func newHistoryPage(a *App) page {
 		title:    "Historial",
 		subtitle: "Todo lo que ha pasado, de lo más nuevo a lo más viejo",
 		icon:     theme.HistoryIcon(),
-		color:    gray,
 		content:  newPanel(list),
 	}
 }

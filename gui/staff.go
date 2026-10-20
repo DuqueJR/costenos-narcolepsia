@@ -56,7 +56,6 @@ func newStaffPage(a *App) page {
 		title:    "Personal",
 		subtitle: "La gente que atiende, por turnos y sin pereza",
 		icon:     theme.LoginIcon(),
-		color:    indigo,
 		actions: []fyne.CanvasObject{
 			newActionButton("Contratar doctor", theme.ContentAddIcon(), widget.HighImportance, a.showHireDoctorForm),
 			newActionButton("Contratar camillero", theme.ContentAddIcon(), widget.MediumImportance, a.showHireOrderlyForm),
@@ -75,7 +74,7 @@ type stat struct {
 // and a row of numbers.
 func newStaffCard(name, id, role string, stats []stat) fyne.CanvasObject {
 	face := newAvatar(52)
-	face.set(name, id)
+	face.set(name)
 	title := widget.NewLabelWithStyle(name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	header := container.NewBorder(nil, nil, face.box, nil,
 		container.NewVBox(title, padded(4, newCaption(id+" · "+role))))

@@ -55,7 +55,6 @@ func newPatientsPage(a *App) page {
 		title:    "Pacientes",
 		subtitle: "Sin afán, pero sin dormirse: busca, mira y atiende",
 		icon:     theme.AccountIcon(),
-		color:    red,
 		actions: []fyne.CanvasObject{
 			newActionButton("Admitir paciente", theme.ContentAddIcon(), widget.HighImportance, a.showAdmitPatientForm),
 		},
@@ -130,7 +129,7 @@ func (v *patientsView) buildDetail() fyne.CanvasObject {
 
 	v.attackLocation = widget.NewEntry()
 	v.attackLocation.SetPlaceHolder("¿Dónde se durmió? p. ej. cafeteria")
-	v.attackBtn = newActionButton("Ataque de sueño", theme.WarningIcon(), widget.DangerImportance, v.sleepAttack)
+	v.attackBtn = newActionButton("Ataque de sueño", theme.WarningIcon(), widget.HighImportance, v.sleepAttack)
 	v.wakeBtn = newActionButton("Despertar", theme.VisibilityIcon(), widget.MediumImportance, v.wakeUp)
 	v.assignBtn = newActionButton("Asignar cuarto", theme.HomeIcon(), widget.HighImportance, v.assignRoom)
 	actions := container.NewVBox(
@@ -188,7 +187,7 @@ func (v *patientsView) refreshDetail() {
 	v.empty.Hide()
 	v.detail.Show()
 
-	v.avatar.set(p.Name(), p.ID())
+	v.avatar.set(p.Name())
 	v.name.SetText(p.Name())
 	v.subtitle.Text = "Paciente " + p.ID()
 	v.subtitle.Refresh()
@@ -218,7 +217,7 @@ func (v *patientsView) sleepAttack() {
 	switch {
 	case err == nil:
 		v.a.lastAssign = &assignResult{patient: p, room: p.Room()}
-		v.a.notify(fmt.Sprintf("%s quedó dormido en el cuarto %d", p.Name(), p.Room().Number()))
+		v.a.notify(fmt.Sprintf("%s ya tiene cama: cuarto %d", p.Name(), p.Room().Number()))
 	case errors.Is(err, hospital.ErrNoRoomAvailable):
 		// The episode is registered anyway: the patient sleeps in the hallway.
 		v.a.lastAssign = &assignResult{patient: p, err: err}
@@ -293,7 +292,7 @@ func (r *patientRow) CreateRenderer() fyne.WidgetRenderer {
 // set shows patient p in the row. The final Refresh redraws the row and
 // recalculates its layout, because the texts change their width.
 func (r *patientRow) set(p *hospital.Patient) {
-	r.avatar.set(p.Name(), p.ID())
+	r.avatar.set(p.Name())
 	r.name.Text = p.Name()
 	r.info.Text = fmt.Sprintf("%s · %d años · %s", p.ID(), p.Age(), levelLabel(p.Level()))
 	r.state.set(stateLabel(p.State()), stateColor(p.State()))

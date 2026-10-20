@@ -30,7 +30,6 @@ func newRoomsPage(a *App) page {
 		title:    "Cuartos",
 		subtitle: "Camas listas pa' cuando a alguien le pique el sueño",
 		icon:     theme.HomeIcon(),
-		color:    green,
 		actions: []fyne.CanvasObject{
 			newActionButton("Agregar cuarto", theme.ContentAddIcon(), widget.HighImportance, a.showAddRoomForm),
 		},
@@ -49,7 +48,7 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 
 	// The cards are built again on every refresh, so the meter starts full
 	// at its value instead of animating from zero each time.
-	beds := newMeter(float64(len(occupants)), float64(r.Capacity()), roomStateColor(r.State()))
+	beds := newMeter(float64(len(occupants)), float64(r.Capacity()), accent)
 	bedsText := newCaption(fmt.Sprintf("%d de %d camas ocupadas", len(occupants), r.Capacity()))
 
 	people := container.NewVBox()
@@ -58,13 +57,13 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 	}
 	for _, p := range occupants {
 		face := newAvatar(30)
-		face.set(p.Name(), p.ID())
+		face.set(p.Name())
 		name := widget.NewLabelWithStyle(p.Name(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 		people.Add(container.NewBorder(nil, nil, face.box, nil, container.NewHBox(name, container.NewCenter(newCaption(p.ID())))))
 	}
 
 	return newPanel(container.NewVBox(
-		container.NewBorder(nil, nil, newIconBadge(theme.HomeIcon(), roomStateColor(r.State()), 30), state.box, title),
+		container.NewBorder(nil, nil, nil, state.box, title),
 		padded(2, beds),
 		bedsText,
 		people,

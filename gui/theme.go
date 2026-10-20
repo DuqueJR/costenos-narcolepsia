@@ -12,32 +12,37 @@ import (
 	"costenos-narcolepsia/hospital"
 )
 
-// Palette of the GUI: the clean grays of Apple interfaces plus the colors of
-// the Caribbean coast, the sea and the sun.
+// Palette of the GUI, taken from the light appearance of macOS. It is almost
+// all neutral grays with one accent color, the blue of Apple. The other
+// colors only appear as small status dots, where they mean something.
 var (
 	canvasGray  = color.NRGBA{R: 0xF5, G: 0xF5, B: 0xF7, A: 0xFF} // window background
-	sidebarBg   = color.NRGBA{R: 0xEE, G: 0xEE, B: 0xF2, A: 0xFF} // sidebar
-	fillGray    = color.NRGBA{R: 0xE9, G: 0xE9, B: 0xEC, A: 0xFF} // buttons and segmented track
-	fieldGray   = color.NRGBA{R: 0xF2, G: 0xF2, B: 0xF5, A: 0xFF} // text fields
-	hairline    = color.NRGBA{R: 0xE3, G: 0xE3, B: 0xE8, A: 0xFF} // separators
-	fieldBorder = color.NRGBA{R: 0xD1, G: 0xD1, B: 0xD6, A: 0xFF} // borders of fields and checkboxes
+	sidebarBg   = color.NRGBA{R: 0xEE, G: 0xEE, B: 0xF0, A: 0xFF} // sidebar
+	selectGray  = color.NRGBA{R: 0xDE, G: 0xDE, B: 0xE3, A: 0xFF} // selected sidebar item
+	fillGray    = color.NRGBA{R: 0xE8, G: 0xE8, B: 0xED, A: 0xFF} // buttons and segmented track
+	fieldGray   = color.NRGBA{R: 0xF5, G: 0xF5, B: 0xF7, A: 0xFF} // text fields and grouped lists
+	hairline    = color.NRGBA{R: 0xE5, G: 0xE5, B: 0xEA, A: 0xFF} // card borders and separators
+	fieldBorder = color.NRGBA{R: 0xD2, G: 0xD2, B: 0xD7, A: 0xFF} // borders of fields and checkboxes
 	white       = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // cards
 	ink         = color.NRGBA{R: 0x1D, G: 0x1D, B: 0x1F, A: 0xFF} // text
-	muted       = color.NRGBA{R: 0x6E, G: 0x6E, B: 0x73, A: 0xFF} // secondary text
-	faint       = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xA6, A: 0xFF} // placeholders and disabled text
+	muted       = color.NRGBA{R: 0x6E, G: 0x6E, B: 0x73, A: 0xFF} // secondary text and icons
+	faint       = color.NRGBA{R: 0xAE, G: 0xAE, B: 0xB2, A: 0xFF} // placeholders and disabled text
+	monogram    = color.NRGBA{R: 0xA8, G: 0xA8, B: 0xAD, A: 0xFF} // avatars, as the monograms of Contacts
 
-	caribe = color.NRGBA{R: 0x0A, G: 0x7E, B: 0xA4, A: 0xFF} // main color: the Caribbean sea
-	sky    = color.NRGBA{R: 0x3F, G: 0xB8, B: 0xD9, A: 0xFF} // light end of the sea gradient
-	sun    = color.NRGBA{R: 0xFF, G: 0xC2, B: 0x33, A: 0xFF} // the coast sun
+	accent = color.NRGBA{R: 0x00, G: 0x71, B: 0xE3, A: 0xFF} // the only accent: the blue of Apple
 	cream  = color.NRGBA{R: 0xF4, G: 0xEA, B: 0xD5, A: 0xFF} // cane fiber of the sombrero vueltiao
 
 	green  = color.NRGBA{R: 0x34, G: 0xC7, B: 0x59, A: 0xFF}
 	orange = color.NRGBA{R: 0xFF, G: 0x95, B: 0x00, A: 0xFF}
 	indigo = color.NRGBA{R: 0x58, G: 0x56, B: 0xD6, A: 0xFF}
-	red    = color.NRGBA{R: 0xFF, G: 0x45, B: 0x3A, A: 0xFF}
-	pink   = color.NRGBA{R: 0xFF, G: 0x2D, B: 0x55, A: 0xFF}
+	red    = color.NRGBA{R: 0xFF, G: 0x3B, B: 0x30, A: 0xFF}
 	gray   = color.NRGBA{R: 0x8E, G: 0x8E, B: 0x93, A: 0xFF}
 )
+
+// colorNameIcon is a color name of our own for the icons of the sidebar.
+// Fyne asks the theme for it like for any other name, so the icons can be
+// recolored with theme.NewColoredResource.
+const colorNameIcon fyne.ThemeColorName = "costenos-icon"
 
 // caribeTheme is the light theme of the GUI. It changes some colors and
 // sizes and uses the font of the system; icons and every other value come
@@ -65,7 +70,12 @@ func newCaribeTheme() caribeTheme {
 		return r
 	}
 	t.regular = load("segoeui.ttf")
-	t.bold = load("segoeuib.ttf")
+	// Semibold instead of bold: Apple titles use a semibold weight, which
+	// gives presence without looking heavy.
+	t.bold = load("segoeuisb.ttf")
+	if t.bold == nil {
+		t.bold = load("segoeuib.ttf")
+	}
 	t.italic = load("segoeuii.ttf")
 	t.boldItalic = load("segoeuiz.ttf")
 	return t
@@ -90,11 +100,13 @@ func (caribeTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Co
 	case theme.ColorNameSeparator:
 		return hairline
 	case theme.ColorNamePrimary, theme.ColorNameHyperlink:
-		return caribe
+		return accent
 	case theme.ColorNameFocus:
-		return tint(caribe, 0x80)
+		return tint(accent, 0x80)
 	case theme.ColorNameSelection:
-		return tint(caribe, 0x1F)
+		return tint(accent, 0x18)
+	case colorNameIcon:
+		return muted
 	case theme.ColorNameHover:
 		return color.NRGBA{A: 0x0A}
 	case theme.ColorNamePressed:
@@ -149,14 +161,14 @@ func (caribeTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 // space inside widgets and large titles, as in Apple interfaces.
 func (caribeTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
-	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius:
+	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius, theme.SizeNameButtonRadius:
 		return 8
-	case theme.SizeNameButtonRadius:
-		return 10
 	case theme.SizeNameCardRadius, theme.SizeNameDialogRadius, theme.SizeNamePopupRadius:
 		return cardRadius
 	case theme.SizeNameInnerPadding:
 		return 10
+	case theme.SizeNamePadding:
+		return 6 // a little more air between cards and widgets than Fyne's 4
 	case theme.SizeNameText:
 		return 14
 	case theme.SizeNameCaptionText:
@@ -174,13 +186,6 @@ func (caribeTheme) Size(name fyne.ThemeSizeName) float32 {
 func tint(c color.Color, a uint8) color.Color {
 	r, g, b, _ := c.RGBA() // 16-bit channels; our colors are opaque
 	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: a}
-}
-
-// darker returns the opaque color c a quarter darker, so text over a tint
-// of c is still easy to read.
-func darker(c color.Color) color.Color {
-	r, g, b, _ := c.RGBA()
-	return color.NRGBA{R: uint8((r >> 8) * 3 / 4), G: uint8((g >> 8) * 3 / 4), B: uint8((b >> 8) * 3 / 4), A: 0xFF}
 }
 
 // stateColor returns the color that identifies patient state s in the GUI:
@@ -219,7 +224,7 @@ func stateLabel(s hospital.PatientState) string {
 func levelColor(l hospital.NarcolepsyLevel) color.Color {
 	switch l {
 	case hospital.Mild:
-		return caribe
+		return gray
 	case hospital.Moderate:
 		return orange
 	case hospital.Severe:

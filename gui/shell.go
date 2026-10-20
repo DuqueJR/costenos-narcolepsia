@@ -16,14 +16,13 @@ import (
 )
 
 // page is one screen of the sidebar: the section of the menu it belongs to,
-// its title and subtitle, its icon and color in the menu, the buttons shown
-// next to the title and its content.
+// its title and subtitle, its icon in the menu, the buttons shown next to
+// the title and its content.
 type page struct {
 	section  string
 	title    string
 	subtitle string
 	icon     fyne.Resource
-	color    color.Color
 	actions  []fyne.CanvasObject
 	content  fyne.CanvasObject
 }
@@ -76,7 +75,7 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 		if i == 0 || p.section != pages[i-1].section {
 			menu.Add(newSectionTitle(p.section))
 		}
-		items[i] = newSidebarItem(p.title, p.icon, p.color, func() { show(i) })
+		items[i] = newSidebarItem(p.title, p.icon, func() { show(i) })
 		menu.Add(items[i])
 	}
 	show(0)
@@ -131,15 +130,17 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewBorder(nil, nil, nil, line, container.NewStack(bg, width, padded(14, content)))
 }
 
-// sidebarItem is one entry of the menu: an icon in a colored square and a
-// title. It is a small widget of its own because it reacts to the mouse: it
-// darkens as soon as the button goes down, runs onTap when it is released
-// and shades its background while the mouse is over it.
+// sidebarItem is one entry of the menu: a gray icon and a title. It is a
+// small widget of its own because it reacts to the mouse: it darkens as
+// soon as the button goes down, runs onTap when it is released and shades
+// its background while the mouse is over it.
 type sidebarItem struct {
 	widget.BaseWidget
 	bg       *canvas.Rectangle
 	label    *canvas.Text
-	badge    fyne.CanvasObject
+	icon     *widget.Icon
+	normal   fyne.Resource // the icon in gray
+	chosen   fyne.Resource // the icon in the accent color, when selected
 	onTap    func()
 	selected bool
 	hovered  bool
@@ -155,40 +156,43 @@ var (
 	_ desktop.Cursorable = (*sidebarItem)(nil)
 )
 
-// newSidebarItem returns a menu item with title and icon over color c that
-// runs onTap when tapped.
-func newSidebarItem(title string, icon fyne.Resource, c color.Color, onTap func()) *sidebarItem {
+// newSidebarItem returns a menu item with title and icon that runs onTap
+// when tapped.
+func newSidebarItem(title string, icon fyne.Resource, onTap func()) *sidebarItem {
 	s := &sidebarItem{
-		bg:    canvas.NewRectangle(color.Transparent),
-		label: canvas.NewText(title, ink),
-		badge: newIconBadge(icon, c, 24),
-		onTap: onTap,
+		bg:     canvas.NewRectangle(color.Transparent),
+		label:  canvas.NewText(title, ink),
+		normal: theme.NewColoredResource(icon, colorNameIcon),
+		chosen: theme.NewColoredResource(icon, theme.ColorNamePrimary),
+		onTap:  onTap,
 	}
-	s.bg.CornerRadius = 8
+	s.icon = widget.NewIcon(s.normal)
+	s.bg.CornerRadius = 6
 	s.ExtendBaseWidget(s)
 	return s
 }
 
-// CreateRenderer lays out the item: the badge on the left and the title.
+// CreateRenderer lays out the item: the icon on the left and the title.
 func (s *sidebarItem) CreateRenderer() fyne.WidgetRenderer {
-	row := container.NewBorder(nil, nil, container.NewCenter(s.badge), nil,
+	icon := container.NewCenter(container.NewGridWrap(fyne.NewSize(18, 18), s.icon))
+	row := container.NewBorder(nil, nil, icon, nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 10, 0), container.NewVBox(layout.NewSpacer(), s.label, layout.NewSpacer())))
 	return widget.NewSimpleRenderer(container.NewStack(s.bg,
 		container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), row)))
 }
 
-// paint sets the background and text of the item from its state: a soft
-// tint of the main color when selected, as the sidebar of the Finder does,
-// a darker shade while pressed and a light one while hovered.
+// paint sets the background, text and icon of the item from its state: a
+// gray piece and a blue icon when selected, as the sidebar of the Finder
+// does, a darker shade while pressed and a light one while hovered.
 func (s *sidebarItem) paint() {
 	s.bg.FillColor = color.Transparent
-	s.label.Color = ink
 	s.label.TextStyle = fyne.TextStyle{}
+	s.icon.SetResource(s.normal)
 	switch {
 	case s.selected:
-		s.bg.FillColor = tint(caribe, 0x22)
-		s.label.Color = darker(caribe)
+		s.bg.FillColor = selectGray
 		s.label.TextStyle = fyne.TextStyle{Bold: true}
+		s.icon.SetResource(s.chosen)
 	case s.pressed:
 		s.bg.FillColor = color.NRGBA{A: 0x1C}
 	case s.hovered:
@@ -272,12 +276,17 @@ func newStatusChips(a *App) fyne.CanvasObject {
 	patients, inHallway, inBed, freeRooms := newPill(), newPill(), newPill(), newPill()
 	a.addRefresher(func() {
 		c := countHospital(a.h)
-		patients.set(plural(c.patients, "paciente", "pacientes"), caribe)
+		patients.set(plural(c.patients, "paciente", "pacientes"), accent)
 		inHallway.set(fmt.Sprintf("%d en pasillo", c.inHallway), orange)
 		inBed.set(fmt.Sprintf("%d en cama", c.inBed), indigo)
 		freeRooms.set(plural(c.freeRooms, "cuarto libre", "cuartos libres"), green)
 	})
-	return container.NewHBox(patients.box, inHallway.box, inBed.box, freeRooms.box)
+	// Each chip gets some room on its right, so the dots do not crowd.
+	spaced := container.NewHBox()
+	for _, chip := range []*pill{patients, inHallway, inBed, freeRooms} {
+		spaced.Add(container.New(layout.NewCustomPaddedLayout(0, 0, 0, 12), chip.box))
+	}
+	return spaced
 }
 
 // plural returns n followed by one when n is 1 and by many otherwise, as in
@@ -292,10 +301,10 @@ func plural(n int, one, many string) string {
 // newStatsStrip builds the row of big stat cards of the summary page. It
 // registers a refresher that recalculates them from the hospital getters.
 func newStatsStrip(a *App) fyne.CanvasObject {
-	patients := newStatCard("Pacientes", theme.AccountIcon(), caribe)
-	inHallway := newStatCard("Dormidos en pasillo", theme.WarningIcon(), orange)
-	inBed := newStatCard("Dormidos en cama", theme.VisibilityOffIcon(), indigo)
-	freeRooms := newStatCard("Cuartos libres", theme.HomeIcon(), green)
+	patients := newStatCard("Pacientes", accent)
+	inHallway := newStatCard("Dormidos en pasillo", orange)
+	inBed := newStatCard("Dormidos en cama", indigo)
+	freeRooms := newStatCard("Cuartos libres", green)
 
 	a.addRefresher(func() {
 		c := countHospital(a.h)
@@ -318,7 +327,6 @@ func newMusicPage() page {
 		title:    "Música",
 		subtitle: "Que suene el picó… pero bajito, que hay pacientes durmiendo",
 		icon:     theme.MediaMusicIcon(),
-		color:    pink,
 		content: newPanel(container.NewBorder(newGarland(10, 22, hairline), nil, nil, nil,
 			container.NewCenter(container.NewVBox(
 				container.NewCenter(newSombrero(150, 100)), text, container.NewCenter(hint))))),

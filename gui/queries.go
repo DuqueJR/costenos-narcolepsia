@@ -105,7 +105,6 @@ func newQueriesPage(a *App) page {
 		title:    "Consultas",
 		subtitle: "Las cuatro consultas del enunciado, al día",
 		icon:     theme.SearchIcon(),
-		color:    orange,
 		content:  newPanel(container.NewBorder(container.New(layout.NewCustomPaddedLayout(0, 12, 0, 0), segments), nil, nil, nil, body)),
 	}
 }

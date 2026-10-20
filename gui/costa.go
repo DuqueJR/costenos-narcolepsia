@@ -111,12 +111,16 @@ func sombreroPixel(x, y, w, h int) color.Color {
 	}
 }
 
-// newAppIcon returns the icon of the app: a rounded square with the
-// Caribbean sea and a sombrero vueltiao in the middle, like a macOS icon.
+// newAppIcon returns the icon of the app: a white rounded square with a thin
+// border and a sombrero vueltiao in the middle, like a macOS icon.
 func newAppIcon(size float32) fyne.CanvasObject {
 	return newRaster(size, size, func(x, y, w, h int) color.Color {
-		if !insideRounded(x, y, w, h, w*22/100) {
+		r := w * 22 / 100
+		if !insideRounded(x, y, w, h, r) {
 			return noColor
+		}
+		if !insideRounded(x-1, y-1, w-2, h-2, r-1) {
+			return fieldBorder // the pixels between the two shapes are the border
 		}
 		// The hat is drawn in the box that goes from 10% to 90% across and
 		// from 22% to 82% down; outside it, or where the hat is transparent,
@@ -127,7 +131,7 @@ func newAppIcon(size float32) fyne.CanvasObject {
 				return c
 			}
 		}
-		return mix(sky, caribe, float64(y)/float64(h))
+		return white
 	})
 }
 
@@ -176,7 +180,7 @@ func newColombiaFlag(width, height float32) fyne.CanvasObject {
 }
 
 // garlandColors are the colors of the little flags of the garland.
-var garlandColors = []color.NRGBA{juniorRed, sun, green, sky, orange, pink}
+var garlandColors = []color.NRGBA{juniorRed, flagGold, green, accent, orange, flagBlue}
 
 // newGarland returns a string of little triangular flags like the ones that
 // hang over the streets during the Carnaval de Barranquilla. The string has
@@ -195,43 +199,6 @@ func newGarland(width, height float32, thread color.Color) fyne.CanvasObject {
 	})
 }
 
-// newSeaBanner returns the background of the welcome banner: the Caribbean
-// sea, a sun on the right and two waves at the bottom, with rounded corners.
-func newSeaBanner() fyne.CanvasObject {
-	return canvas.NewRasterWithPixels(seaPixel)
-}
-
-// seaPixel returns the color of pixel (x, y) of a banner of w x h pixels.
-func seaPixel(x, y, w, h int) color.Color {
-	if !insideRounded(x, y, w, h, h/9) {
-		return noColor
-	}
-	fx := float64(x) / float64(w)
-	fy := float64(y) / float64(h)
-	c := mix(caribe, sky, 0.8*fx+0.2*fy)
-
-	// The sun: a disc with a soft glow around it. Distances are measured in
-	// banner heights, so the sun stays round when the banner gets wider.
-	d := math.Hypot((fx-0.9)*float64(w)/float64(h), fy-0.3)
-	const disc, glow = 0.13, 0.42
-	switch {
-	case d < disc:
-		c = sun
-	case d < glow:
-		t := (glow - d) / (glow - disc) // 1 next to the disc, 0 far away
-		c = mix(c, sun, t*t*0.8)
-	}
-
-	// Two waves: below each sine line the sea gets a little lighter.
-	for i, level := range []float64{0.76, 0.88} {
-		wave := level + 0.03*math.Sin(fx*math.Pi*float64(5+2*i)+float64(i))
-		if fy > wave {
-			c = mix(c, white, 0.16)
-		}
-	}
-	return c
-}
-
 // insideRounded reports whether pixel (x, y) is inside a rectangle of
 // w x h pixels with corners of radius r: it measures the distance from the
 // pixel to the closest point of the inner rectangle that has no corners.
@@ -240,15 +207,6 @@ func insideRounded(x, y, w, h, r int) bool {
 	cy := min(max(y, r), h-1-r)
 	dx, dy := x-cx, y-cy
 	return dx*dx+dy*dy <= r*r
-}
-
-// mix returns the color between a (t = 0) and b (t = 1).
-func mix(a, b color.NRGBA, t float64) color.NRGBA {
-	t = min(max(t, 0), 1)
-	channel := func(p, q uint8) uint8 {
-		return uint8(float64(p) + (float64(q)-float64(p))*t)
-	}
-	return color.NRGBA{R: channel(a.R, b.R), G: channel(a.G, b.G), B: channel(a.B, b.B), A: 0xFF}
 }
 
 // absInt returns the absolute value of n.

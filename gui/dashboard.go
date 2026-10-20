@@ -21,11 +21,10 @@ const recentEpisodes = 5
 // day, quick actions and the last episodes. It is called "Resumen" and not
 // "Inicio" because a specific name says what is inside.
 func newDashboardPage(a *App) page {
-	date := canvas.NewText("", white)
+	date := canvas.NewText("", muted)
 	date.TextSize = 13
-	date.TextStyle = fyne.TextStyle{Bold: true}
 
-	beds := newMeter(0, 0, caribe)
+	beds := newMeter(0, 0, accent)
 	bedsCount := newHeading("", theme.SizeNameHeadingText)
 	bedsText := newCaption("")
 	occupancy := newTitledPanel("Ocupación de camas",
@@ -40,8 +39,7 @@ func newDashboardPage(a *App) page {
 
 	saying := widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 	saying.Wrapping = fyne.TextWrapWord
-	quote := newTitledPanel("Frase costeña del día", container.NewBorder(nil,
-		container.NewHBox(newVueltiaoBand(70, 8)), nil, nil, saying))
+	quote := newTitledPanel("Frase costeña del día", saying)
 
 	quick := newTitledPanel("Acciones rápidas", container.NewGridWithColumns(2,
 		newActionButton("Admitir paciente", theme.AccountIcon(), widget.HighImportance, a.showAdmitPatientForm),
@@ -65,7 +63,7 @@ func newDashboardPage(a *App) page {
 			total += r.Capacity()
 		}
 		bedsCount.SetText(fmt.Sprintf("%d / %d", used, total))
-		beds.set(float64(used), float64(total), caribe)
+		beds.set(float64(used), float64(total), accent)
 		bedsText.Text = fmt.Sprintf("Esperando cama en el pasillo: %d", len(a.h.PatientsInHallway()))
 		bedsText.Refresh()
 
@@ -98,27 +96,22 @@ func newDashboardPage(a *App) page {
 		title:    "Resumen",
 		subtitle: "¿Qué más pues? Así va el hospital hoy",
 		icon:     theme.GridIcon(),
-		color:    caribe,
 		content:  container.NewVScroll(content),
 	}
 }
 
-// newBanner returns the welcome banner: a Carnaval garland on top of the
-// Caribbean sea drawn by seaPixel, today's date, a greeting and a sombrero
-// vueltiao on the right.
+// newBanner returns the welcome card: today's date, a greeting and, on the
+// right, a sombrero vueltiao. A thin vueltiao stripe closes it, as a
+// signature: the costeño detail is there, but it does not shout.
 func newBanner(date *canvas.Text) fyne.CanvasObject {
-	title := canvas.NewText("¡Ajá, bienvenido al hospital!", white)
-	title.TextSize = 26
+	title := canvas.NewText("¡Ajá, bienvenido al hospital!", ink)
+	title.TextSize = 28
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	line := canvas.NewText("Aquí nadie se queda dormío sin que lo atiendan", white)
+	line := canvas.NewText("Aquí nadie se queda dormío sin que lo atiendan.", muted)
 	line.TextSize = 14
-	motto := canvas.NewText("Quien lo vive es quien lo goza · Costa Caribe", white)
-	motto.TextSize = 12
 
-	text := container.NewVBox(date, title, line, padded(2, motto))
-	hat := container.NewCenter(newSombrero(150, 96))
-	inside := container.New(layout.NewCustomPaddedLayout(10, 26, 28, 120),
-		container.NewBorder(nil, nil, nil, hat, text))
-	garland := container.New(layout.NewCustomPaddedLayout(0, 0, 24, 24), newGarland(10, 20, white))
-	return container.NewStack(newSeaBanner(), container.NewBorder(garland, nil, nil, nil, inside))
+	text := container.NewVBox(layout.NewSpacer(), date, title, line, layout.NewSpacer())
+	hat := container.NewCenter(newSombrero(132, 86))
+	top := container.New(layout.NewCustomPaddedLayout(4, 12, 8, 8), container.NewBorder(nil, nil, nil, hat, text))
+	return newPanel(container.NewBorder(nil, newVueltiaoBand(10, 8), nil, nil, top))
 }
