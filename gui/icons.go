@@ -15,6 +15,13 @@ import (
 //go:embed icons/*.svg
 var iconFiles embed.FS
 
+// pictureFiles holds the pictures of the GUI, from Wikimedia Commons: the
+// sombrero vueltiao and the flag of Junior. images/CREDITS.md says who made
+// them and under which license.
+//
+//go:embed images/*.png
+var pictureFiles embed.FS
+
 // icon returns the icon called name, such as "bed", as a themed resource:
 // Fyne paints it with the colors of the theme, like its own icons.
 func icon(name string) fyne.Resource {
@@ -26,4 +33,15 @@ func icon(name string) fyne.Resource {
 		return theme.QuestionIcon()
 	}
 	return theme.NewThemedResource(fyne.NewStaticResource(name+".svg", data))
+}
+
+// picture returns the picture called name, such as "sombrero", as a
+// resource. Like icon, a typo shows a question mark instead of stopping
+// the app.
+func picture(name string) fyne.Resource {
+	data, err := pictureFiles.ReadFile("images/" + name + ".png")
+	if err != nil {
+		return theme.QuestionIcon()
+	}
+	return fyne.NewStaticResource(name+".png", data)
 }

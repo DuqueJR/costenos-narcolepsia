@@ -8,12 +8,14 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 )
 
-// The drawings of this file are canvas.Raster objects: Fyne calls a Go
-// function once per pixel and paints the color it returns. They are pure
-// Go, with no image files. Most functions work with fx and fy, the position
-// of the pixel from 0 to 1, so a drawing does not depend on its size.
+// The costeño details of the GUI. The sombrero and the Junior flag are
+// pictures (see images/CREDITS.md). The vueltiao stripe, the flag of
+// Colombia and the Carnaval garland are canvas.Raster objects: Fyne calls a
+// Go function once per pixel and paints the color it returns, so they need
+// no image files.
 
 // noColor is a fully transparent pixel. It must be a color.NRGBA, like the
 // other pixels: Fyne picks the kind of image from the type of the first
@@ -27,7 +29,6 @@ var (
 	flagBlue  = color.NRGBA{R: 0x00, G: 0x38, B: 0x93, A: 0xFF} // blue of the flag of Colombia
 	flagRed   = color.NRGBA{R: 0xCE, G: 0x11, B: 0x26, A: 0xFF} // red of the flag of Colombia
 	flagGold  = color.NRGBA{R: 0xFC, G: 0xD1, B: 0x16, A: 0xFF} // yellow of the flag of Colombia
-	pole      = color.NRGBA{R: 0x5C, G: 0x4A, B: 0x3A, A: 0xFF} // wooden stick of the pennant
 )
 
 // newRaster returns a drawing of width x height painted by pixel.
@@ -65,100 +66,34 @@ func vueltiaoPixel(x, y, tile int) color.Color {
 	return cream
 }
 
-// newSombrero returns a sombrero vueltiao of width x height, seen from the
-// front: a wide brim with woven rings and a tall woven crown.
+// newSombrero returns the sombrero vueltiao, the woven hat of the coast, in
+// a box of width x height. The picture keeps its proportions inside it.
 func newSombrero(width, height float32) fyne.CanvasObject {
-	return newRaster(width, height, sombreroPixel)
+	img := canvas.NewImageFromResource(picture("sombrero"))
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(width, height))
+	return img
 }
 
-// sombreroPixel returns the color of pixel (x, y) of a sombrero vueltiao of
-// w x h pixels. The brim and the crown are two ellipses: a point is inside
-// an ellipse when ((fx-cx)/rx)² + ((fy-cy)/ry)² <= 1. When the hat is
-// small the woven pattern would look like a smudge, so it uses stripes.
-func sombreroPixel(x, y, w, h int) color.Color {
-	fx := float64(x) / float64(w)
-	fy := float64(y) / float64(h)
-	tile := h / 7
-	woven := func() color.Color {
-		if tile < 4 {
-			if int(fy*14)%2 == 0 {
-				return ink
-			}
-			return cream
-		}
-		return vueltiaoPixel(x, y, tile)
-	}
-
-	cx, cy := (fx-0.5)/0.21, (fy-0.43)/0.36
-	if cx*cx+cy*cy <= 1 && fy < 0.72 { // the crown, above the brim
-		if fy > 0.6 {
-			return ink // the dark band around the base of the crown
-		}
-		return woven()
-	}
-
-	bx, by := (fx-0.5)/0.49, (fy-0.75)/0.2
-	d := math.Sqrt(bx*bx + by*by) // 1 on the edge of the brim
-	switch {
-	case d > 1:
-		return noColor
-	case d > 0.92:
-		return ink // the dark edge of the brim
-	case d > 0.6 && d < 0.84:
-		return woven() // the woven ring of the brim
-	default:
-		return cream
-	}
-}
-
-// newAppIcon returns the icon of the app: a white rounded square with a thin
-// border and a sombrero vueltiao in the middle, like a macOS icon.
+// newAppIcon returns the icon of the app: the sombrero vueltiao on a white
+// rounded square with a thin border, like a macOS icon.
 func newAppIcon(size float32) fyne.CanvasObject {
-	return newRaster(size, size, func(x, y, w, h int) color.Color {
-		r := w * 22 / 100
-		if !insideRounded(x, y, w, h, r) {
-			return noColor
-		}
-		if !insideRounded(x-1, y-1, w-2, h-2, r-1) {
-			return fieldBorder // the pixels between the two shapes are the border
-		}
-		// The hat is drawn in the box that goes from 10% to 90% across and
-		// from 22% to 82% down; outside it, or where the hat is transparent,
-		// the sea shows.
-		x0, y0, hw, hh := w/10, h*22/100, w*8/10, h*6/10
-		if x >= x0 && x < x0+hw && y >= y0 && y < y0+hh {
-			if c := sombreroPixel(x-x0, y-y0, hw, hh); c != noColor {
-				return c
-			}
-		}
-		return white
-	})
+	bg := canvas.NewRectangle(white)
+	bg.CornerRadius = size * 0.22
+	bg.StrokeColor = fieldBorder
+	bg.StrokeWidth = 1
+	hat := newSombrero(size*0.8, size*0.8)
+	return container.NewGridWrap(fyne.NewSize(size, size), container.NewStack(bg, padded(size*0.1, hat)))
 }
 
-// newJuniorPennant returns a pennant with the red and white stripes of
-// Junior de Barranquilla, the football team of the city, on a stick.
-func newJuniorPennant(width, height float32) fyne.CanvasObject {
-	return newRaster(width, height, func(x, y, w, h int) color.Color {
-		stick := max(w/16, 2)
-		if x < stick {
-			return pole
-		}
-		// A triangle that points right: it gets thinner as fx grows.
-		fx := float64(x-stick) / float64(w-stick)
-		half := 0.5 * (1 - fx)
-		fy := float64(y) / float64(h)
-		edge := 1.5 / float64(h) // a red border of about 1.5 pixels
-		switch {
-		case math.Abs(fy-0.5) > half:
-			return noColor
-		case math.Abs(fy-0.5) > half-edge, x-stick < 2:
-			return juniorRed // the border, so the white stripes show on white
-		case (x-stick)/max(w/7, 1)%2 == 0:
-			return juniorRed
-		default:
-			return white
-		}
-	})
+// newJuniorFlag returns the flag of Junior de Barranquilla, the football
+// team of the city, with slightly rounded corners.
+func newJuniorFlag(width, height float32) fyne.CanvasObject {
+	img := canvas.NewImageFromResource(picture("junior"))
+	img.FillMode = canvas.ImageFillContain
+	img.CornerRadius = 3
+	img.SetMinSize(fyne.NewSize(width, height))
+	return img
 }
 
 // newColombiaFlag returns the flag of Colombia: yellow on the top half,

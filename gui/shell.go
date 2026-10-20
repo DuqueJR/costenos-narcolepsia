@@ -102,8 +102,8 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 }
 
 // newSidebar returns the gray column on the left: the app icon and name on
-// top, the menu in the middle and, at the bottom, a Junior pennant and the
-// flag of Colombia.
+// top, the menu in the middle and, at the bottom, the flag of Junior and
+// the flag of Colombia.
 func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	name := canvas.NewText("Costeños", ink)
 	name.TextSize = 16
@@ -113,7 +113,7 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 
 	cheer := canvas.NewText("¡Junior, tu papá!", juniorRed)
 	cheer.TextStyle = fyne.TextStyle{Bold: true}
-	pennant := container.NewBorder(nil, nil, newJuniorPennant(52, 30), nil,
+	pennant := container.NewBorder(nil, nil, container.NewCenter(newJuniorFlag(54, 30)), nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 10, 0),
 			container.NewVBox(layout.NewSpacer(), cheer, newCaption("Rojiblanco de corazón"), layout.NewSpacer())))
 	madeIn := container.NewHBox(container.NewCenter(newColombiaFlag(20, 13)), newCaption("Hecho en la Costa"))
