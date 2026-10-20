@@ -23,6 +23,7 @@ func main() {
 	}
 
 	fyneApp := app.NewWithID("co.edu.eia.costenos")
+	fyneApp.Settings().SetTheme(caribeTheme{})
 	win := fyneApp.NewWindow("Hospital de los Costeños con Narcolepsia")
 	win.Resize(fyne.NewSize(1100, 720))
 

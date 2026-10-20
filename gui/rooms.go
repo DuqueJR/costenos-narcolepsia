@@ -1,7 +1,6 @@
 package main
 
 import (
-	"image/color"
 	"strconv"
 	"strings"
 
@@ -40,19 +39,6 @@ func newRoomCard(a *App, r *hospital.Room) fyne.CanvasObject {
 
 	title := "Cuarto " + strconv.Itoa(r.Number())
 	return widget.NewCard(title, "", container.NewVBox(capacity, state, occupants))
-}
-
-// roomStateColor returns green for an available room and indigo for an
-// occupied one.
-func roomStateColor(s hospital.RoomState) color.Color {
-	switch s {
-	case hospital.Available:
-		return green
-	case hospital.Occupied:
-		return indigo
-	default:
-		return gray // unknown state
-	}
 }
 
 // occupantsText returns the names of the patients in a room, or "Libre" if

@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -230,42 +229,6 @@ func (r *patientRow) set(p *hospital.Patient) {
 	r.Refresh()
 }
 
-// Colors shared by the views to show states.
-var (
-	green  = color.NRGBA{R: 0x16, G: 0xA3, B: 0x4A, A: 0xFF}
-	amber  = color.NRGBA{R: 0xD9, G: 0x77, B: 0x06, A: 0xFF}
-	indigo = color.NRGBA{R: 0x4F, G: 0x46, B: 0xE5, A: 0xFF}
-	gray   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
-)
-
-// stateColor returns the color that identifies patient state s in the GUI:
-// green when awake, amber when asleep in the hallway and indigo when asleep
-// in bed.
-func stateColor(s hospital.PatientState) color.Color {
-	switch s {
-	case hospital.Awake:
-		return green
-	case hospital.AsleepInHallway:
-		return amber
-	case hospital.AsleepInBed:
-		return indigo
-	default:
-		return gray // unknown state
-	}
-}
-
-// initials returns the first letter of the first two words of name in upper
-// case, for example "CP" for "Carlos Polo".
-func initials(name string) string {
-	words := strings.Fields(name)
-	result := ""
-	for i := 0; i < len(words) && i < 2; i++ {
-		first := []rune(words[i])[0] // Fields never returns empty words
-		result += string(unicode.ToUpper(first))
-	}
-	return result
-}
-
 // locationText returns location, or "-" if the patient never fell asleep.
 func locationText(location string) string {
 	if location == "" {
@@ -288,13 +251,4 @@ func doctorText(d *hospital.Doctor) string {
 		return "Sin asignar"
 	}
 	return d.Name() + " (" + d.Specialty() + ")"
-}
-
-// setEnabled enables button b when enabled is true and disables it otherwise.
-func setEnabled(b *widget.Button, enabled bool) {
-	if enabled {
-		b.Enable()
-	} else {
-		b.Disable()
-	}
 }
