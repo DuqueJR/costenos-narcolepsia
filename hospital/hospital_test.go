@@ -401,6 +401,9 @@ func TestHospitalDispatchRoundRobin(t *testing.T) {
 		t.Fatalf("HireStaff error: %v", err)
 	}
 
+	// dispatchLocked must be called with the lock held.
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	want := []Attender{doctor, orderly, doctor, orderly}
 	for i, w := range want {
 		got, err := h.dispatchLocked()
@@ -417,7 +420,11 @@ func TestHospitalFlowErrors(t *testing.T) {
 	h := NewHospital("Test Hospital")
 	_, assignNilErr := h.AssignRoom(nil)
 	_, assignAwakeErr := h.AssignRoom(newTestPatient(t, "P1"))
+	// dispatchLocked must be called with the lock held. It is released right
+	// after, because RegisterEpisode and History below take it again.
+	h.mu.Lock()
 	_, dispatchErr := h.dispatchLocked()
+	h.mu.Unlock()
 
 	tests := []struct {
 		name string

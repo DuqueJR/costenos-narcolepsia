@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -11,7 +12,23 @@ import (
 // unexported, so everything is registered and read through its methods.
 // The staff lives in a []Attender, so the hospital can dispatch any kind of
 // staff member (doctor, orderly...) without knowing its concrete type.
+//
+// Hospital is safe for concurrent use: every exported method takes the
+// mutex. It holds a sync.Mutex, so it must never be copied; always use the
+// *Hospital returned by NewHospital.
 type Hospital struct {
+	// mu protects every other field, and the patients, rooms and staff that
+	// the methods of Hospital modify.
+	//
+	// Locking convention: every exported method locks mu and defers the
+	// unlock. Go's sync.Mutex is not reentrant: if a method that already
+	// holds mu calls another exported method, that call waits for mu forever
+	// (deadlock). So the work lives in unexported methods whose names end in
+	// Locked (assignRoomLocked, dispatchLocked, registerEpisodeLocked,
+	// findPatientLocked...). They never touch mu and must only be called with
+	// mu already held; the exported methods are thin wrappers around them.
+	mu sync.Mutex
+
 	name     string
 	patients []*Patient
 	doctors  []*Doctor
@@ -30,6 +47,8 @@ func NewHospital(name string) *Hospital {
 // wrapping ErrInvalidData if p is nil, or ErrDuplicateID if a patient with
 // the same ID is already admitted.
 func (h *Hospital) AdmitPatient(p *Patient) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if p == nil {
 		return fmt.Errorf("admit patient: nil patient: %w", ErrInvalidData)
 	}
@@ -45,10 +64,13 @@ func (h *Hospital) AdmitPatient(p *Patient) error {
 // error wrapping ErrInvalidData if a is nil, or ErrDuplicateID if a staff
 // member with the same ID is already hired.
 func (h *Hospital) HireStaff(a Attender) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.hireStaffLocked(a)
 }
 
-// hireStaffLocked is HireStaff without taking the lock.
+// hireStaffLocked is HireStaff without taking the lock: h.mu must
+// already be held.
 func (h *Hospital) hireStaffLocked(a Attender) error {
 	if a == nil {
 		return fmt.Errorf("hire staff: nil attender: %w", ErrInvalidData)
@@ -67,6 +89,8 @@ func (h *Hospital) hireStaffLocked(a Attender) error {
 // returns an error wrapping ErrInvalidData if d is nil, or the error of
 // HireStaff.
 func (h *Hospital) HireDoctor(d *Doctor) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if d == nil {
 		return fmt.Errorf("hire doctor: nil doctor: %w", ErrInvalidData)
 	}
@@ -81,6 +105,8 @@ func (h *Hospital) HireDoctor(d *Doctor) error {
 // ErrInvalidData if r is nil, or ErrDuplicateID if a room with the same
 // number already exists.
 func (h *Hospital) AddRoom(r *Room) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if r == nil {
 		return fmt.Errorf("add room: nil room: %w", ErrInvalidData)
 	}
@@ -98,10 +124,13 @@ func (h *Hospital) AddRoom(r *Room) error {
 // In that last case the patient stays asleep in the hallway. AssignRoom
 // never creates rooms.
 func (h *Hospital) AssignRoom(p *Patient) (*Room, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.assignRoomLocked(p)
 }
 
-// assignRoomLocked is AssignRoom without taking the lock.
+// assignRoomLocked is AssignRoom without taking the lock: h.mu must
+// already be held.
 func (h *Hospital) assignRoomLocked(p *Patient) (*Room, error) {
 	if p == nil {
 		return nil, fmt.Errorf("assign room: nil patient: %w", ErrInvalidData)
@@ -122,7 +151,8 @@ func (h *Hospital) assignRoomLocked(p *Patient) (*Room, error) {
 
 // dispatchLocked chooses the staff member who attends the next emergency,
 // taking turns over the whole staff (round-robin). It returns an error
-// wrapping ErrNoStaff if the hospital has no staff.
+// wrapping ErrNoStaff if the hospital has no staff. h.mu must already be
+// held.
 func (h *Hospital) dispatchLocked() (Attender, error) {
 	if len(h.staff) == 0 {
 		return nil, fmt.Errorf("dispatch: %w", ErrNoStaff)
@@ -135,10 +165,13 @@ func (h *Hospital) dispatchLocked() (Attender, error) {
 // RegisterEpisode adds record rec to the history of the hospital. It
 // returns an error wrapping ErrInvalidData if rec has no patient.
 func (h *Hospital) RegisterEpisode(rec EpisodeRecord) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.registerEpisodeLocked(rec)
 }
 
-// registerEpisodeLocked is RegisterEpisode without taking the lock.
+// registerEpisodeLocked is RegisterEpisode without taking the lock: h.mu must
+// already be held.
 func (h *Hospital) registerEpisodeLocked(rec EpisodeRecord) error {
 	if rec.Patient() == nil {
 		return fmt.Errorf("register episode: record without patient: %w", ErrInvalidData)
@@ -149,7 +182,9 @@ func (h *Hospital) registerEpisodeLocked(rec EpisodeRecord) error {
 
 // HandleSleepAttack runs the whole flow of a sleep attack of patient p at
 // location: the patient falls asleep, gets the first free room, the next
-// staff member attends them and the episode is added to the history.
+// staff member attends them and the episode is added to the history. The
+// lock is held for the whole flow, so no other goroutine sees the patient,
+// the rooms or the staff half way through it.
 //
 // It returns the record AND an error at the same time. An error wrapping
 // ErrNoRoomAvailable means "episode registered, but the patient stayed in
@@ -158,6 +193,8 @@ func (h *Hospital) registerEpisodeLocked(rec EpisodeRecord) error {
 // empty: ErrInvalidData if p is nil, ErrAlreadyAsleep if p is already
 // asleep, ErrNoStaff if there is nobody to attend, or the error of Attend.
 func (h *Hospital) HandleSleepAttack(p *Patient, location string) (EpisodeRecord, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if p == nil {
 		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: nil patient: %w", ErrInvalidData)
 	}
@@ -189,6 +226,8 @@ func (h *Hospital) HandleSleepAttack(p *Patient, location string) (EpisodeRecord
 // error wrapping ErrInvalidData if p is nil, or the error of Release or
 // WakeUp, such as ErrAlreadyAwake.
 func (h *Hospital) WakeUpPatient(p *Patient) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if p == nil {
 		return fmt.Errorf("wake up patient: nil patient: %w", ErrInvalidData)
 	}
@@ -207,6 +246,8 @@ func (h *Hospital) WakeUpPatient(p *Patient) error {
 // hallway, in the order they were admitted, so an orderly can be sent to
 // them. It returns an empty slice, never nil, when there are none.
 func (h *Hospital) PatientsInHallway() []*Patient {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	hallway := []*Patient{}
 	for _, p := range h.patients {
 		if p.State() == AsleepInHallway {
@@ -222,6 +263,8 @@ func (h *Hospital) PatientsInHallway() []*Patient {
 // other levels never appear. A map has no order, so the caller must sort the
 // keys if it needs a stable order.
 func (h *Hospital) SevereReport() map[*Patient]int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	report := make(map[*Patient]int)
 	for _, p := range h.patients {
 		if p.Level() == Severe {
@@ -249,10 +292,13 @@ func sameDay(a, b time.Time) bool {
 // FindPatient returns the admitted patient with the given id. It returns an
 // error wrapping ErrNotFound if there is none.
 func (h *Hospital) FindPatient(id string) (*Patient, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.findPatientLocked(id)
 }
 
-// findPatientLocked is FindPatient without taking the lock.
+// findPatientLocked is FindPatient without taking the lock: h.mu must
+// already be held.
 func (h *Hospital) findPatientLocked(id string) (*Patient, error) {
 	for _, p := range h.patients {
 		if p.ID() == id {
@@ -265,6 +311,8 @@ func (h *Hospital) findPatientLocked(id string) (*Patient, error) {
 // FindDoctor returns the hired doctor with the given id. It returns an
 // error wrapping ErrNotFound if there is none.
 func (h *Hospital) FindDoctor(id string) (*Doctor, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	for _, d := range h.doctors {
 		if d.ID() == id {
 			return d, nil
@@ -276,10 +324,13 @@ func (h *Hospital) FindDoctor(id string) (*Doctor, error) {
 // FindRoom returns the room with the given number. It returns an error
 // wrapping ErrNotFound if there is none.
 func (h *Hospital) FindRoom(number int) (*Room, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.findRoomLocked(number)
 }
 
-// findRoomLocked is FindRoom without taking the lock.
+// findRoomLocked is FindRoom without taking the lock: h.mu must
+// already be held.
 func (h *Hospital) findRoomLocked(number int) (*Room, error) {
 	for _, r := range h.rooms {
 		if r.Number() == number {
@@ -291,31 +342,43 @@ func (h *Hospital) findRoomLocked(number int) (*Room, error) {
 
 // Name returns the name of the hospital.
 func (h *Hospital) Name() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.name
 }
 
 // Patients returns a copy of the admitted patients, so callers cannot
 // change the hospital by modifying the returned slice.
 func (h *Hospital) Patients() []*Patient {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return slices.Clone(h.patients)
 }
 
 // Doctors returns a copy of the hired doctors.
 func (h *Hospital) Doctors() []*Doctor {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return slices.Clone(h.doctors)
 }
 
 // Staff returns a copy of the whole staff, doctors included.
 func (h *Hospital) Staff() []Attender {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return slices.Clone(h.staff)
 }
 
 // Rooms returns a copy of the rooms of the hospital.
 func (h *Hospital) Rooms() []*Room {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return slices.Clone(h.rooms)
 }
 
 // History returns a copy of every episode registered in the hospital.
 func (h *Hospital) History() []EpisodeRecord {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return slices.Clone(h.history)
 }
