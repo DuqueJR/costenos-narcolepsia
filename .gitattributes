@@ -1,0 +1,2 @@
+# Always check out text files with LF endings, even on Windows: gofmt expects LF.
+* text=auto eol=lf
