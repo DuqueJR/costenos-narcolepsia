@@ -84,6 +84,52 @@ func (h *Hospital) AddRoom(r *Room) error {
 	return nil
 }
 
+// AssignRoom puts patient p, asleep in the hallway, in the first room that
+// has a free bed, following the order in which the rooms were added. It
+// returns an error wrapping ErrInvalidData if p is nil, ErrNotInHallway if p
+// is not asleep in the hallway, or ErrNoRoomAvailable if every room is full.
+// In that last case the patient stays asleep in the hallway. AssignRoom
+// never creates rooms.
+func (h *Hospital) AssignRoom(p *Patient) (*Room, error) {
+	if p == nil {
+		return nil, fmt.Errorf("assign room: nil patient: %w", ErrInvalidData)
+	}
+	if p.State() != AsleepInHallway {
+		return nil, fmt.Errorf("assign room to %s: %w", p.ID(), ErrNotInHallway)
+	}
+	for _, r := range h.rooms {
+		if r.IsAvailable() {
+			if err := r.Occupy(p); err != nil {
+				return nil, fmt.Errorf("assign room to %s: %w", p.ID(), err)
+			}
+			return r, nil
+		}
+	}
+	return nil, fmt.Errorf("assign room to %s: %w", p.ID(), ErrNoRoomAvailable)
+}
+
+// dispatch chooses the staff member who attends the next emergency, taking
+// turns over the whole staff (round-robin). It returns an error wrapping
+// ErrNoStaff if the hospital has no staff.
+func (h *Hospital) dispatch() (Attender, error) {
+	if len(h.staff) == 0 {
+		return nil, fmt.Errorf("dispatch: %w", ErrNoStaff)
+	}
+	i := h.next % len(h.staff)
+	h.next = i + 1
+	return h.staff[i], nil
+}
+
+// RegisterEpisode adds record rec to the history of the hospital. It
+// returns an error wrapping ErrInvalidData if rec has no patient.
+func (h *Hospital) RegisterEpisode(rec EpisodeRecord) error {
+	if rec.Patient() == nil {
+		return fmt.Errorf("register episode: record without patient: %w", ErrInvalidData)
+	}
+	h.history = append(h.history, rec)
+	return nil
+}
+
 // FindPatient returns the admitted patient with the given id. It returns an
 // error wrapping ErrNotFound if there is none.
 func (h *Hospital) FindPatient(id string) (*Patient, error) {
