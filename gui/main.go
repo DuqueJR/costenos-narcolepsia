@@ -32,7 +32,7 @@ func main() {
 // newPages builds every page of the sidebar for app a, in menu order.
 func newPages(a *App) []page {
 	return []page{
-		{title: "Pacientes", subtitle: "Estado de cada paciente y sus acciones", icon: theme.AccountIcon(), content: newPatientsTab(a)},
+		newPatientsPage(a),
 		{title: "Cuartos", subtitle: "Camas y ocupantes", icon: theme.HomeIcon(), content: newRoomsTab(a)},
 		{title: "Consultas", subtitle: "Las cuatro consultas del enunciado", icon: theme.SearchIcon(), content: newQueriesTab(a)},
 		{title: "Historial", subtitle: "Episodios del más reciente al más antiguo", icon: theme.HistoryIcon(), content: newHistoryTab(a)},

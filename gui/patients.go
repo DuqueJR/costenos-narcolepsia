@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"image/color"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -15,17 +15,30 @@ import (
 	"costenos-narcolepsia/hospital"
 )
 
-// patientsView is the Patients tab: the list of patients on the left and the
-// detail of the selected patient, with its actions, on the right.
+// patientsView is the Patients page: the searchable list of patients on the
+// left and the detail of the selected patient, with its actions, on the
+// right.
 type patientsView struct {
 	a        *App
-	patients []*hospital.Patient // what the list shows, reloaded on every refresh
+	query    string              // text typed in the search box
+	patients []*hospital.Patient // patients that match query, shown by list
 	selected *hospital.Patient   // nil until the user picks a patient
 
-	list *widget.List
-	card *widget.Card
+	list  *widget.List
+	count *canvas.Text
 
-	id, age, level, state, location, room, doctor *widget.Label
+	empty  fyne.CanvasObject // shown while no patient is selected
+	detail fyne.CanvasObject // shown when a patient is selected
+
+	avatar    *avatar
+	name      *widget.Label
+	subtitle  *canvas.Text
+	statePill *pill
+	levelPill *pill
+	age       *widget.Label
+	location  *widget.Label
+	room      *widget.Label
+	doctor    *widget.Label
 
 	attackLocation *widget.Entry
 	attackBtn      *widget.Button
@@ -33,9 +46,33 @@ type patientsView struct {
 	assignBtn      *widget.Button
 }
 
-// newPatientsTab builds the Patients tab of app a and registers its refresher.
-func newPatientsTab(a *App) fyne.CanvasObject {
+// newPatientsPage builds the Patients page of app a and registers its
+// refresher.
+func newPatientsPage(a *App) page {
 	v := &patientsView{a: a}
+	return page{
+		title:    "Pacientes",
+		subtitle: "Busca un paciente, mira su estado y registra lo que le pasa",
+		icon:     theme.AccountIcon(),
+		actions: []fyne.CanvasObject{
+			newActionButton("Admitir paciente", theme.ContentAddIcon(), widget.HighImportance, a.showAdmitPatientForm),
+		},
+		content: v.build(),
+	}
+}
+
+// build creates the widgets of the page and returns its content.
+func (v *patientsView) build() fyne.CanvasObject {
+	search := widget.NewEntry()
+	search.SetPlaceHolder("Buscar por nombre o ID")
+	search.ActionItem = widget.NewIcon(theme.SearchIcon())
+	search.OnChanged = func(s string) {
+		v.query = s
+		// The rows move when the filter changes, so the old highlight would
+		// point to another patient. The detail keeps showing v.selected.
+		v.list.UnselectAll()
+		v.refresh()
+	}
 
 	// The list asks how many rows there are, creates a few rows and reuses
 	// them, filling each one with the patient at position i.
@@ -55,70 +92,113 @@ func newPatientsTab(a *App) fyne.CanvasObject {
 		v.selected = v.patients[i]
 		v.refreshDetail()
 	}
+	v.count = newCaption("")
 
-	v.id = widget.NewLabel("")
+	left := newPanel(container.NewBorder(
+		container.NewVBox(search, padded(4, v.count)), nil, nil, nil, v.list))
+
+	split := container.NewHSplit(left, v.buildDetail())
+	split.Offset = 0.42
+	v.a.addRefresher(v.refresh)
+	return split
+}
+
+// buildDetail creates the right panel: an empty state and the detail of the
+// selected patient, one on top of the other, so only one is visible.
+func (v *patientsView) buildDetail() fyne.CanvasObject {
+	v.avatar = newAvatar(76)
+	v.name = newHeading("", theme.SizeNameHeadingText)
+	v.subtitle = newCaption("")
+	v.statePill = newPill()
+	v.levelPill = newPill()
+	pills := container.NewHBox(v.statePill.box, v.levelPill.box)
+	header := container.NewBorder(nil, nil, v.avatar.box, nil,
+		padded(6, container.NewVBox(v.name, padded(2, v.subtitle), pills)))
+
 	v.age = widget.NewLabel("")
-	v.level = widget.NewLabel("")
-	v.state = widget.NewLabel("")
 	v.location = widget.NewLabel("")
 	v.room = widget.NewLabel("")
 	v.doctor = widget.NewLabel("")
-	info := widget.NewForm(
-		widget.NewFormItem("ID", v.id),
-		widget.NewFormItem("Edad", v.age),
-		widget.NewFormItem("Nivel", v.level),
-		widget.NewFormItem("Estado", v.state),
-		widget.NewFormItem("Ubicación (último ataque)", v.location),
-		widget.NewFormItem("Cuarto", v.room),
-		widget.NewFormItem("Doctor asignado", v.doctor),
+	info := container.NewGridWithColumns(2,
+		infoItem("Edad", v.age),
+		infoItem("Último ataque en", v.location),
+		infoItem("Cuarto", v.room),
+		infoItem("Doctor asignado", v.doctor),
 	)
 
 	v.attackLocation = widget.NewEntry()
-	v.attackLocation.SetPlaceHolder("Ubicación, p. ej. cafeteria")
-	v.attackBtn = widget.NewButtonWithIcon("Sleep attack", theme.WarningIcon(), v.sleepAttack)
-	v.wakeBtn = widget.NewButtonWithIcon("Wake up", theme.VisibilityIcon(), v.wakeUp)
-	v.assignBtn = widget.NewButtonWithIcon("Assign room", theme.HomeIcon(), v.assignRoom)
+	v.attackLocation.SetPlaceHolder("¿Dónde se durmió? p. ej. cafeteria")
+	v.attackBtn = newActionButton("Ataque de sueño", theme.WarningIcon(), widget.DangerImportance, v.sleepAttack)
+	v.wakeBtn = newActionButton("Despertar", theme.VisibilityIcon(), widget.MediumImportance, v.wakeUp)
+	v.assignBtn = newActionButton("Asignar cuarto", theme.HomeIcon(), widget.HighImportance, v.assignRoom)
 	actions := container.NewVBox(
-		widget.NewForm(widget.NewFormItem("Ubicación", v.attackLocation)),
-		container.NewGridWithColumns(3, v.attackBtn, v.wakeBtn, v.assignBtn),
+		newHeading("Acciones", theme.SizeNameSubHeadingText),
+		container.NewBorder(nil, nil, nil, v.attackBtn, v.attackLocation),
+		container.NewGridWithColumns(2, v.wakeBtn, v.assignBtn),
 	)
 
-	v.card = widget.NewCard("", "", container.NewVBox(info, widget.NewSeparator(), actions))
-	a.addRefresher(v.refresh)
+	v.detail = container.NewVBox(header, widget.NewSeparator(), padded(4, info), widget.NewSeparator(), actions)
 
-	split := container.NewHSplit(v.list, container.NewVScroll(v.card))
-	split.Offset = 0.4
-	return split
+	icon := widget.NewIcon(theme.NewColoredResource(theme.AccountIcon(), theme.ColorNamePrimary))
+	hint := widget.NewLabelWithStyle("Selecciona un paciente de la lista", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	v.empty = container.NewCenter(container.NewVBox(
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(64, 64), icon)), hint))
+
+	return newPanel(container.NewStack(v.empty, container.NewVScroll(v.detail)))
+}
+
+// infoItem returns a small gray caption over value, for the detail grid.
+func infoItem(caption string, value *widget.Label) fyne.CanvasObject {
+	value.TextStyle = fyne.TextStyle{Bold: true}
+	return container.NewVBox(padded(2, newCaption(caption)), value)
 }
 
 // refresh reloads the list and the detail from the hospital. App.refreshAll
 // calls it after every action.
 func (v *patientsView) refresh() {
-	v.patients = v.a.h.Patients()
+	all := v.a.h.Patients()
+	v.patients = filterPatients(all, v.query)
+	v.count.Text = fmt.Sprintf("Mostrando %d de %d pacientes", len(v.patients), len(all))
+	v.count.Refresh()
 	v.list.Refresh()
 	v.refreshDetail()
 }
 
-// refreshDetail shows the selected patient in the card and enables only the
-// actions that make sense for their current state.
+// filterPatients returns the patients whose name or ID contain query,
+// ignoring upper and lower case. An empty query keeps every patient.
+func filterPatients(patients []*hospital.Patient, query string) []*hospital.Patient {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return patients
+	}
+	var found []*hospital.Patient
+	for _, p := range patients {
+		if strings.Contains(strings.ToLower(p.Name()+" "+p.ID()), query) {
+			found = append(found, p)
+		}
+	}
+	return found
+}
+
+// refreshDetail shows the selected patient and enables only the actions
+// that make sense for their current state.
 func (v *patientsView) refreshDetail() {
 	p := v.selected
 	if p == nil {
-		v.card.SetTitle("Selecciona un paciente")
-		for _, l := range []*widget.Label{v.id, v.age, v.level, v.state, v.location, v.room, v.doctor} {
-			l.SetText("-")
-		}
-		v.attackBtn.Disable()
-		v.wakeBtn.Disable()
-		v.assignBtn.Disable()
+		v.detail.Hide()
+		v.empty.Show()
 		return
 	}
+	v.empty.Hide()
+	v.detail.Show()
 
-	v.card.SetTitle(p.Name())
-	v.id.SetText(p.ID())
-	v.age.SetText(strconv.Itoa(p.Age()))
-	v.level.SetText(p.Level().String())
-	v.state.SetText(p.State().String())
+	v.avatar.set(p.Name(), p.ID())
+	v.name.SetText(p.Name())
+	v.subtitle.Text = "Paciente " + p.ID()
+	v.subtitle.Refresh()
+	v.statePill.set(stateLabel(p.State()), stateColor(p.State()))
+	v.levelPill.set("Narcolepsia "+strings.ToLower(levelLabel(p.Level())), levelColor(p.Level()))
+	v.age.SetText(strconv.Itoa(p.Age()) + " años")
 	v.location.SetText(locationText(p.Location()))
 	v.room.SetText(roomText(p.Room()))
 	v.doctor.SetText(doctorText(p.AssignedDoctor()))
@@ -150,6 +230,7 @@ func (v *patientsView) sleepAttack() {
 		// Nothing was registered, so it is not an assignment result.
 		v.a.showError(err)
 	}
+	v.attackLocation.SetText("")
 	v.a.refreshAll()
 }
 
@@ -177,55 +258,44 @@ func (v *patientsView) assignRoom() {
 }
 
 // patientRow is one row of the patient list: an avatar with initials, the
-// name and ID, and a pill colored by state. The list creates only a few rows
-// and reuses them, so set changes what a row shows.
+// name over the ID, age and level, and a pill colored by state. The list
+// creates only a few rows and reuses them, so set changes what a row shows.
 type patientRow struct {
 	widget.BaseWidget
-	avatar    *canvas.Circle
-	initials  *canvas.Text
-	name      *widget.Label
-	id        *widget.Label
-	pill      *canvas.Rectangle
-	stateText *canvas.Text
+	avatar *avatar
+	name   *canvas.Text
+	info   *canvas.Text
+	state  *pill
 }
 
 // newPatientRow returns an empty row, ready to be filled with set.
 func newPatientRow() *patientRow {
 	r := &patientRow{
-		avatar:    canvas.NewCircle(theme.Color(theme.ColorNamePrimary)),
-		initials:  canvas.NewText("", color.White),
-		name:      widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		id:        widget.NewLabel(""),
-		pill:      canvas.NewRectangle(color.Transparent),
-		stateText: canvas.NewText("", color.White),
+		avatar: newAvatar(40),
+		name:   canvas.NewText("", ink),
+		info:   newCaption(""),
+		state:  newPill(),
 	}
-	r.initials.TextStyle = fyne.TextStyle{Bold: true}
-	r.pill.CornerRadius = 10
-	r.stateText.TextSize = theme.CaptionTextSize()
-	r.stateText.TextStyle = fyne.TextStyle{Bold: true}
+	r.name.TextStyle = fyne.TextStyle{Bold: true}
 	r.ExtendBaseWidget(r)
 	return r
 }
 
 // CreateRenderer lays out the row: avatar on the left, pill on the right and
-// the name over the ID in the middle. Fyne calls it once per row.
+// the name over the details in the middle. Fyne calls it once per row.
 func (r *patientRow) CreateRenderer() fyne.WidgetRenderer {
-	avatar := container.NewGridWrap(fyne.NewSize(40, 40),
-		container.NewStack(r.avatar, container.NewCenter(r.initials)))
-	pill := container.NewStack(r.pill, container.NewPadded(r.stateText))
-	text := container.NewVBox(r.name, r.id)
-	return widget.NewSimpleRenderer(
-		container.NewBorder(nil, nil, container.NewCenter(avatar), container.NewCenter(pill), text))
+	text := container.NewCenter(container.NewVBox(r.name, r.info))
+	return widget.NewSimpleRenderer(padded(4, container.NewBorder(nil, nil,
+		r.avatar.box, r.state.box, container.NewHBox(padded(2, text)))))
 }
 
 // set shows patient p in the row. The final Refresh redraws the row and
-// recalculates its layout, because the pill grows or shrinks with its text.
+// recalculates its layout, because the texts change their width.
 func (r *patientRow) set(p *hospital.Patient) {
-	r.initials.Text = initials(p.Name())
-	r.name.SetText(p.Name())
-	r.id.SetText(p.ID())
-	r.pill.FillColor = stateColor(p.State())
-	r.stateText.Text = p.State().String()
+	r.avatar.set(p.Name(), p.ID())
+	r.name.Text = p.Name()
+	r.info.Text = fmt.Sprintf("%s · %d años · %s", p.ID(), p.Age(), levelLabel(p.Level()))
+	r.state.set(stateLabel(p.State()), stateColor(p.State()))
 	r.Refresh()
 }
 
