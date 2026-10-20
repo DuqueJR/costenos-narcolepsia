@@ -7,7 +7,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/theme"
 )
 
 func main() {
@@ -36,8 +35,8 @@ func newPages(a *App) []page {
 		newPatientsPage(a),
 		newRoomsPage(a),
 		newStaffPage(a),
-		{title: "Consultas", subtitle: "Las cuatro consultas del enunciado", icon: theme.SearchIcon(), content: newQueriesTab(a)},
-		{title: "Historial", subtitle: "Episodios del más reciente al más antiguo", icon: theme.HistoryIcon(), content: newHistoryTab(a)},
+		newQueriesPage(a),
+		newHistoryPage(a),
 		newMusicPage(),
 	}
 }

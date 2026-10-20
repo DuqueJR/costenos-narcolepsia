@@ -9,12 +9,13 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"costenos-narcolepsia/hospital"
 )
 
-// queriesView is the Queries tab: the four queries of the assignment, one
+// queriesView is the Queries page: the four queries of the assignment, one
 // per inner tab. Inner tabs are used instead of an accordion because a list
 // or a table inside an accordion only gets the height of one row.
 type queriesView struct {
@@ -23,7 +24,7 @@ type queriesView struct {
 	hallway     []string // lines shown by hallwayList
 	hallwayList *widget.List
 
-	doctors      []*hospital.Doctor
+	doctors      []*hospital.Doctor // reloaded on every refresh, because doctors can be hired
 	doctorSelect *widget.Select
 	episodes     []string // lines shown by episodesList
 	episodesList *widget.List
@@ -38,18 +39,15 @@ type queriesView struct {
 // reportHeaders are the column titles of the severity report table.
 var reportHeaders = []string{"ID", "Paciente", "Episodios hoy"}
 
-// newQueriesTab builds the Queries tab of app a and registers its refresher.
-func newQueriesTab(a *App) fyne.CanvasObject {
-	v := &queriesView{a: a, doctors: a.h.Doctors()}
+// newQueriesPage builds the Queries page of app a and registers its
+// refresher.
+func newQueriesPage(a *App) page {
+	v := &queriesView{a: a}
 
 	v.hallwayList = newTextList(func() []string { return v.hallway })
 
-	names := make([]string, 0, len(v.doctors))
-	for _, d := range v.doctors {
-		names = append(names, d.Name()+" ("+d.Specialty()+")")
-	}
 	v.episodesList = newTextList(func() []string { return v.episodes })
-	v.doctorSelect = widget.NewSelect(names, func(string) { v.refreshEpisodes() })
+	v.doctorSelect = widget.NewSelect(nil, func(string) { v.refreshEpisodes() })
 	v.doctorSelect.PlaceHolder = "Elige un doctor"
 
 	v.assignment = widget.NewLabel("")
@@ -83,18 +81,21 @@ func newQueriesTab(a *App) fyne.CanvasObject {
 	v.reportTable.SetColumnWidth(1, 240)
 	v.reportTable.SetColumnWidth(2, 140)
 
-	if len(v.doctors) > 0 {
-		v.doctorSelect.SetSelectedIndex(0)
-	}
 	a.addRefresher(v.refresh)
 
-	return container.NewAppTabs(
-		container.NewTabItem("Pacientes en el pasillo", v.hallwayList),
-		container.NewTabItem("Episodios por doctor",
-			container.NewBorder(v.doctorSelect, nil, nil, nil, v.episodesList)),
-		container.NewTabItem("Asignación de cuarto", container.NewVBox(v.assignment)),
-		container.NewTabItem("Reporte de severidad", v.reportTable),
+	tabs := container.NewAppTabs(
+		container.NewTabItemWithIcon("Pacientes en el pasillo", theme.WarningIcon(), v.hallwayList),
+		container.NewTabItemWithIcon("Episodios por doctor", theme.AccountIcon(),
+			container.NewBorder(padded(4, v.doctorSelect), nil, nil, nil, v.episodesList)),
+		container.NewTabItemWithIcon("Asignación de cuarto", theme.HomeIcon(), container.NewVBox(padded(4, v.assignment))),
+		container.NewTabItemWithIcon("Reporte de severidad", theme.InfoIcon(), v.reportTable),
 	)
+	return page{
+		title:    "Consultas",
+		subtitle: "Las cuatro consultas del enunciado, siempre al día",
+		icon:     theme.SearchIcon(),
+		content:  newPanel(tabs),
+	}
 }
 
 // refresh runs the four queries again on the hospital. App.refreshAll calls
@@ -107,6 +108,16 @@ func (v *queriesView) refresh() {
 	v.hallway = orNone(hallway)
 	v.hallwayList.Refresh()
 
+	v.doctors = v.a.h.Doctors()
+	names := make([]string, 0, len(v.doctors))
+	for _, d := range v.doctors {
+		names = append(names, d.Name()+" ("+d.Specialty()+")")
+	}
+	// SetOptions keeps the chosen doctor, because its name is still there.
+	v.doctorSelect.SetOptions(names)
+	if v.doctorSelect.SelectedIndex() < 0 && len(names) > 0 {
+		v.doctorSelect.SetSelectedIndex(0)
+	}
 	v.refreshEpisodes()
 
 	v.assignment.SetText(assignmentText(v.a.lastAssign))

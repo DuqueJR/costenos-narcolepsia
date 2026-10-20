@@ -3,12 +3,12 @@ package main
 import (
 	"slices"
 
-	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 )
 
-// newHistoryTab builds the History tab of app a: the Summary of every
+// newHistoryPage builds the History page of app a: the Summary of every
 // episode of the hospital, from the newest to the oldest.
-func newHistoryTab(a *App) fyne.CanvasObject {
+func newHistoryPage(a *App) page {
 	var lines []string
 	list := newTextList(func() []string { return lines })
 
@@ -19,5 +19,10 @@ func newHistoryTab(a *App) fyne.CanvasObject {
 		lines = orNone(summaries(history))
 		list.Refresh()
 	})
-	return list
+	return page{
+		title:    "Historial",
+		subtitle: "Todos los episodios, del más reciente al más antiguo",
+		icon:     theme.HistoryIcon(),
+		content:  newPanel(list),
+	}
 }
