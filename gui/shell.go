@@ -72,7 +72,8 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 }
 
 // newSidebar returns the gray column on the left: the app icon and name on
-// top, the menu in the middle and a costeño greeting at the bottom.
+// top, the menu in the middle and, at the bottom, a Junior pennant and the
+// flag of Colombia.
 func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	name := canvas.NewText("Costeños", ink)
 	name.TextSize = 16
@@ -80,12 +81,13 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	brand := container.NewBorder(nil, nil, newAppIcon(40), nil,
 		container.New(layout.NewCustomPaddedLayout(2, 0, 10, 0), container.NewVBox(name, newCaption("Hospital · Narcolepsia"))))
 
-	hello := canvas.NewText("¡Ajá, mi llave!", ink)
-	hello.TextStyle = fyne.TextStyle{Bold: true}
-	footer := newPanel(container.NewVBox(
-		newVueltiaoBand(10, 12), padded(2, hello),
-		newCaption("Aquí nadie se queda dormío"), newCaption("sin que lo atiendan."),
-	))
+	cheer := canvas.NewText("¡Junior, tu papá!", juniorRed)
+	cheer.TextStyle = fyne.TextStyle{Bold: true}
+	pennant := container.NewBorder(nil, nil, newJuniorPennant(52, 30), nil,
+		container.New(layout.NewCustomPaddedLayout(0, 0, 10, 0),
+			container.NewVBox(layout.NewSpacer(), cheer, newCaption("Rojiblanco de corazón"), layout.NewSpacer())))
+	madeIn := container.NewHBox(container.NewCenter(newColombiaFlag(20, 13)), newCaption("Hecho en la Costa"))
+	footer := newPanel(container.NewVBox(pennant, widget.NewSeparator(), madeIn))
 
 	content := container.NewBorder(padded(4, brand), footer, nil, nil, container.NewVScroll(menu))
 
@@ -139,15 +141,16 @@ func (s *sidebarItem) CreateRenderer() fyne.WidgetRenderer {
 		container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), row)))
 }
 
-// setSelected highlights the item with the main color when on is true.
+// setSelected highlights the item with a soft tint of the main color when
+// on is true, as the sidebar of the Finder does.
 func (s *sidebarItem) setSelected(on bool) {
 	s.selected = on
 	s.bg.FillColor = color.Transparent
 	s.label.Color = ink
 	s.label.TextStyle = fyne.TextStyle{}
 	if on {
-		s.bg.FillColor = caribe
-		s.label.Color = white
+		s.bg.FillColor = tint(caribe, 0x22)
+		s.label.Color = darker(caribe)
 		s.label.TextStyle = fyne.TextStyle{Bold: true}
 	}
 	s.Refresh()
@@ -215,7 +218,7 @@ func newStatsStrip(a *App) fyne.CanvasObject {
 }
 
 // newMusicPage is the Music page. The player arrives in another branch, so
-// for now it only says so.
+// for now it only says so, with a hat and a Carnaval garland.
 func newMusicPage() page {
 	text := newHeading("Próximamente", theme.SizeNameSubHeadingText)
 	text.Alignment = fyne.TextAlignCenter
@@ -223,10 +226,11 @@ func newMusicPage() page {
 	return page{
 		section:  "Extras",
 		title:    "Música",
-		subtitle: "Un reproductor para la sala de espera",
+		subtitle: "Que suene el picó… pero bajito, que hay pacientes durmiendo",
 		icon:     theme.MediaMusicIcon(),
 		color:    pink,
-		content: newPanel(container.NewCenter(container.NewVBox(
-			container.NewCenter(newIconBadge(theme.MediaMusicIcon(), pink, 64)), text, container.NewCenter(hint)))),
+		content: newPanel(container.NewBorder(newGarland(10, 22, hairline), nil, nil, nil,
+			container.NewCenter(container.NewVBox(
+				container.NewCenter(newSombrero(150, 100)), text, container.NewCenter(hint))))),
 	}
 }

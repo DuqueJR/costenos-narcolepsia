@@ -143,7 +143,7 @@ func (v *patientsView) buildDetail() fyne.CanvasObject {
 
 	hint := widget.NewLabelWithStyle("Escoge un paciente de la lista, mi llave", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	v.empty = container.NewCenter(container.NewVBox(
-		container.NewCenter(newIconBadge(theme.AccountIcon(), red, 56)), hint,
+		container.NewCenter(newSombrero(120, 78)), hint,
 		container.NewCenter(newCaption("Aquí vas a ver su estado y lo que puedes hacer"))))
 
 	return newPanel(container.NewStack(v.empty, container.NewVScroll(v.detail)))

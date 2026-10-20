@@ -254,3 +254,73 @@ func newActionButton(label string, icon fyne.Resource, importance widget.Importa
 	b.Importance = importance
 	return b
 }
+
+// meter is a thin capsule bar, like the ones of macOS, filled from the left
+// up to value/total. It is a widget with its own renderer because the width
+// of the fill depends on the size the meter gets.
+type meter struct {
+	widget.BaseWidget
+	value, total float64
+	color        color.Color
+}
+
+// newMeter returns an empty meter filled with color c.
+func newMeter(c color.Color) *meter {
+	m := &meter{color: c}
+	m.ExtendBaseWidget(m)
+	return m
+}
+
+// set fills the meter up to value out of total, with color c.
+func (m *meter) set(value, total float64, c color.Color) {
+	m.value, m.total, m.color = value, total, c
+	m.Refresh()
+}
+
+// CreateRenderer returns the renderer that draws the meter.
+func (m *meter) CreateRenderer() fyne.WidgetRenderer {
+	track := canvas.NewRectangle(fillGray)
+	track.CornerRadius = 4
+	fill := canvas.NewRectangle(m.color)
+	fill.CornerRadius = 4
+	return &meterRenderer{m: m, track: track, fill: fill}
+}
+
+// meterRenderer draws a meter: a gray track and a colored fill over it.
+type meterRenderer struct {
+	m     *meter
+	track *canvas.Rectangle
+	fill  *canvas.Rectangle
+}
+
+// Layout makes the track as big as the meter and the fill as wide as the
+// part of value out of total.
+func (r *meterRenderer) Layout(size fyne.Size) {
+	r.track.Resize(size)
+	part := 0.0
+	if r.m.total > 0 {
+		part = min(r.m.value/r.m.total, 1)
+	}
+	r.fill.Resize(fyne.NewSize(size.Width*float32(part), size.Height))
+}
+
+// MinSize is the smallest size of a meter: thin, as on macOS.
+func (r *meterRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(40, 8)
+}
+
+// Refresh repaints the fill with the current color and width.
+func (r *meterRenderer) Refresh() {
+	r.fill.FillColor = r.m.color
+	r.Layout(r.m.Size())
+	r.track.Refresh()
+	r.fill.Refresh()
+}
+
+// Objects returns the shapes of the meter, from back to front.
+func (r *meterRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.track, r.fill}
+}
+
+// Destroy does nothing: the meter holds no resources.
+func (r *meterRenderer) Destroy() {}

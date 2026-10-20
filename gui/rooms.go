@@ -47,16 +47,13 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 	state.set(roomStateLabel(r.State()), roomStateColor(r.State()))
 	title := newHeading("Cuarto "+strconv.Itoa(r.Number()), theme.SizeNameSubHeadingText)
 
-	beds := widget.NewProgressBar()
-	beds.Max = float64(r.Capacity())
-	beds.TextFormatter = func() string {
-		return fmt.Sprintf("%d de %d camas ocupadas", len(occupants), r.Capacity())
-	}
-	beds.SetValue(float64(len(occupants)))
+	beds := newMeter(roomStateColor(r.State()))
+	beds.set(float64(len(occupants)), float64(r.Capacity()), roomStateColor(r.State()))
+	bedsText := newCaption(fmt.Sprintf("%d de %d camas ocupadas", len(occupants), r.Capacity()))
 
 	people := container.NewVBox()
 	if len(occupants) == 0 {
-		people.Add(padded(6, newCaption("Libre, esperando al próximo dormilón")))
+		people.Add(padded(6, newCaption("Libre como hamaca en lunes")))
 	}
 	for _, p := range occupants {
 		face := newAvatar(30)
@@ -68,6 +65,7 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 	return newPanel(container.NewVBox(
 		container.NewBorder(nil, nil, newIconBadge(theme.HomeIcon(), roomStateColor(r.State()), 30), state.box, title),
 		padded(2, beds),
+		bedsText,
 		people,
 	))
 }
