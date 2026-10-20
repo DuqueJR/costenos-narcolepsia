@@ -28,7 +28,7 @@ func main() {
 
 	a := newApp(h, win)
 	header := newHeader(a)
-	tabs := newTabs()
+	tabs := newTabs(a)
 	win.SetContent(container.NewBorder(header, nil, nil, nil, tabs))
 
 	a.refreshAll()
@@ -66,11 +66,11 @@ func newHeader(a *App) fyne.CanvasObject {
 	return container.NewGridWithColumns(4, patients, inHallway, inBed, freeRooms)
 }
 
-// newTabs builds the tabs of the main window, each one with its theme icon.
-// For now every tab shows a placeholder.
-func newTabs() *container.AppTabs {
+// newTabs builds the tabs of the main window of app a, each one with its
+// theme icon. The tabs that are not built yet show a placeholder.
+func newTabs(a *App) *container.AppTabs {
 	return container.NewAppTabs(
-		container.NewTabItemWithIcon("Pacientes", theme.AccountIcon(), comingSoon()),
+		container.NewTabItemWithIcon("Pacientes", theme.AccountIcon(), newPatientsTab(a)),
 		container.NewTabItemWithIcon("Cuartos", theme.HomeIcon(), comingSoon()),
 		container.NewTabItemWithIcon("Consultas", theme.SearchIcon(), comingSoon()),
 		container.NewTabItemWithIcon("Historial", theme.HistoryIcon(), comingSoon()),
