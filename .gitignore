@@ -1,0 +1,19 @@
+# Binarios compilados
+*.exe
+*.out
+/costenos-narcolepsia
+
+# Binarios de tests y cobertura
+*.test
+coverage.out
+
+# Configuración de editores
+.vscode/
+.idea/
+
+# Archivos personales que no se suben
+notas_ia.md
+docs/enunciado.pdf
+
+# Fotos y música de la interfaz bonus (datos locales)
+gui/data/
