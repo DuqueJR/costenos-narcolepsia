@@ -44,4 +44,16 @@ var (
 	// ErrNotFound is returned when the hospital looks for a patient, a
 	// doctor or a room that is not registered.
 	ErrNotFound = errors.New("not found")
+
+	// ErrNotInHallway is returned when the hospital tries to assign a room
+	// to a patient who is not asleep in the hallway.
+	ErrNotInHallway = errors.New("patient not asleep in hallway")
+
+	// ErrNoRoomAvailable is returned when no room of the hospital has a free
+	// bed. The patient stays asleep in the hallway.
+	ErrNoRoomAvailable = errors.New("no room available")
+
+	// ErrNoStaff is returned when the hospital has to dispatch someone to an
+	// emergency but has no staff.
+	ErrNoStaff = errors.New("no staff available")
 )

@@ -1,6 +1,7 @@
 package hospital
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -81,6 +82,108 @@ func (h *Hospital) AddRoom(r *Room) error {
 		return fmt.Errorf("add room %d: %w", r.Number(), ErrDuplicateID)
 	}
 	h.rooms = append(h.rooms, r)
+	return nil
+}
+
+// AssignRoom puts patient p, asleep in the hallway, in the first room that
+// has a free bed, following the order in which the rooms were added. It
+// returns an error wrapping ErrInvalidData if p is nil, ErrNotInHallway if p
+// is not asleep in the hallway, or ErrNoRoomAvailable if every room is full.
+// In that last case the patient stays asleep in the hallway. AssignRoom
+// never creates rooms.
+func (h *Hospital) AssignRoom(p *Patient) (*Room, error) {
+	if p == nil {
+		return nil, fmt.Errorf("assign room: nil patient: %w", ErrInvalidData)
+	}
+	if p.State() != AsleepInHallway {
+		return nil, fmt.Errorf("assign room to %s: %w", p.ID(), ErrNotInHallway)
+	}
+	for _, r := range h.rooms {
+		if r.IsAvailable() {
+			if err := r.Occupy(p); err != nil {
+				return nil, fmt.Errorf("assign room to %s: %w", p.ID(), err)
+			}
+			return r, nil
+		}
+	}
+	return nil, fmt.Errorf("assign room to %s: %w", p.ID(), ErrNoRoomAvailable)
+}
+
+// dispatch chooses the staff member who attends the next emergency, taking
+// turns over the whole staff (round-robin). It returns an error wrapping
+// ErrNoStaff if the hospital has no staff.
+func (h *Hospital) dispatch() (Attender, error) {
+	if len(h.staff) == 0 {
+		return nil, fmt.Errorf("dispatch: %w", ErrNoStaff)
+	}
+	i := h.next % len(h.staff)
+	h.next = i + 1
+	return h.staff[i], nil
+}
+
+// RegisterEpisode adds record rec to the history of the hospital. It
+// returns an error wrapping ErrInvalidData if rec has no patient.
+func (h *Hospital) RegisterEpisode(rec EpisodeRecord) error {
+	if rec.Patient() == nil {
+		return fmt.Errorf("register episode: record without patient: %w", ErrInvalidData)
+	}
+	h.history = append(h.history, rec)
+	return nil
+}
+
+// HandleSleepAttack runs the whole flow of a sleep attack of patient p at
+// location: the patient falls asleep, gets the first free room, the next
+// staff member attends them and the episode is added to the history.
+//
+// It returns the record AND an error at the same time. An error wrapping
+// ErrNoRoomAvailable means "episode registered, but the patient stayed in
+// the hallway": the returned record is valid and is already in History().
+// Any other error means the episode was not registered and the record is
+// empty: ErrInvalidData if p is nil, ErrAlreadyAsleep if p is already
+// asleep, ErrNoStaff if there is nobody to attend, or the error of Attend.
+func (h *Hospital) HandleSleepAttack(p *Patient, location string) (EpisodeRecord, error) {
+	if p == nil {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: nil patient: %w", ErrInvalidData)
+	}
+	if err := p.SufferSleepAttack(location); err != nil {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", err)
+	}
+	// Not having a room does not stop the flow: the patient is attended in
+	// the hallway and roomErr is returned at the end.
+	_, roomErr := h.AssignRoom(p)
+	if roomErr != nil && !errors.Is(roomErr, ErrNoRoomAvailable) {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", roomErr)
+	}
+	attender, err := h.dispatch()
+	if err != nil {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack of %s: %w", p.ID(), err)
+	}
+	rec, err := attender.Attend(p, location)
+	if err != nil {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", err)
+	}
+	if err := h.RegisterEpisode(rec); err != nil {
+		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", err)
+	}
+	return rec, roomErr
+}
+
+// WakeUpPatient wakes patient p up. If p is sleeping in a room, the room is
+// released first, so its bed is free for the next patient. It returns an
+// error wrapping ErrInvalidData if p is nil, or the error of Release or
+// WakeUp, such as ErrAlreadyAwake.
+func (h *Hospital) WakeUpPatient(p *Patient) error {
+	if p == nil {
+		return fmt.Errorf("wake up patient: nil patient: %w", ErrInvalidData)
+	}
+	if r := p.Room(); r != nil {
+		if err := r.Release(p); err != nil {
+			return fmt.Errorf("wake up patient %s: %w", p.ID(), err)
+		}
+	}
+	if err := p.WakeUp(); err != nil {
+		return fmt.Errorf("wake up patient: %w", err)
+	}
 	return nil
 }
 
