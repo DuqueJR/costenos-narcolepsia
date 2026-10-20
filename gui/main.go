@@ -73,7 +73,7 @@ func newTabs(a *App) *container.AppTabs {
 		container.NewTabItemWithIcon("Pacientes", theme.AccountIcon(), newPatientsTab(a)),
 		container.NewTabItemWithIcon("Cuartos", theme.HomeIcon(), newRoomsTab(a)),
 		container.NewTabItemWithIcon("Consultas", theme.SearchIcon(), newQueriesTab(a)),
-		container.NewTabItemWithIcon("Historial", theme.HistoryIcon(), comingSoon()),
+		container.NewTabItemWithIcon("Historial", theme.HistoryIcon(), newHistoryTab(a)),
 		container.NewTabItemWithIcon("Música", theme.MediaMusicIcon(), comingSoon()),
 	)
 }
