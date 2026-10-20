@@ -28,4 +28,12 @@ var (
 	// ErrNotInRoom is returned when releasing a patient who is not in the
 	// room.
 	ErrNotInRoom = errors.New("patient not in room")
+
+	// ErrAlreadyUnderCare is returned when a doctor diagnoses a patient who
+	// is already in their care.
+	ErrAlreadyUnderCare = errors.New("patient already under care")
+
+	// ErrPatientAwake is returned when someone tries to attend a sleep
+	// emergency of a patient who is awake.
+	ErrPatientAwake = errors.New("patient is awake")
 )

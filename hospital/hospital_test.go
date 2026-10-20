@@ -138,3 +138,65 @@ func TestEpisodeRecordSummary(t *testing.T) {
 		}
 	}
 }
+
+// newTestDoctor builds a valid doctor or stops the test.
+func newTestDoctor(t *testing.T, id string) *Doctor {
+	t.Helper()
+	d, err := NewDoctor(id, "Doctor "+id, 45, "Neurology")
+	if err != nil {
+		t.Fatalf("NewDoctor(%q) error: %v", id, err)
+	}
+	return d
+}
+
+func TestDoctorAttendAsleepPatient(t *testing.T) {
+	d := newTestDoctor(t, "D-01")
+	p := newTestPatient(t, "P1")
+	if err := p.SufferSleepAttack("cafeteria"); err != nil {
+		t.Fatalf("SufferSleepAttack error: %v", err)
+	}
+
+	rec, err := d.Attend(p, "cafeteria")
+	if err != nil {
+		t.Fatalf("Attend error: %v", err)
+	}
+	episodes := d.MyEpisodes()
+	if len(episodes) != 1 {
+		t.Fatalf("len(MyEpisodes()) = %d, want 1", len(episodes))
+	}
+	if episodes[0].ID() != "D-01-E1" || rec.ID() != "D-01-E1" {
+		t.Errorf("episode ID = %q (returned %q), want %q", episodes[0].ID(), rec.ID(), "D-01-E1")
+	}
+	if p.AssignedDoctor() != d {
+		t.Errorf("AssignedDoctor() = %v, want doctor %s", p.AssignedDoctor(), d.ID())
+	}
+}
+
+func TestDoctorAttendAwakePatient(t *testing.T) {
+	d := newTestDoctor(t, "D-01")
+	p := newTestPatient(t, "P1")
+
+	_, err := d.Attend(p, "cafeteria")
+	if !errors.Is(err, ErrPatientAwake) {
+		t.Errorf("Attend error = %v, want %v", err, ErrPatientAwake)
+	}
+	if n := len(d.MyEpisodes()); n != 0 {
+		t.Errorf("len(MyEpisodes()) = %d, want 0", n)
+	}
+}
+
+func TestDoctorDiagnoseTwice(t *testing.T) {
+	d := newTestDoctor(t, "D-01")
+	p := newTestPatient(t, "P1")
+	if err := d.DiagnosePatient(p); err != nil {
+		t.Fatalf("first DiagnosePatient error: %v", err)
+	}
+
+	err := d.DiagnosePatient(p)
+	if !errors.Is(err, ErrAlreadyUnderCare) {
+		t.Errorf("second DiagnosePatient error = %v, want %v", err, ErrAlreadyUnderCare)
+	}
+	if n := len(d.Patients()); n != 1 {
+		t.Errorf("len(Patients()) = %d, want 1", n)
+	}
+}

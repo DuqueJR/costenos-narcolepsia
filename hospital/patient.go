@@ -11,6 +11,7 @@ type Patient struct {
 	state           PatientState
 	currentLocation string
 	room            *Room
+	assignedDoctor  *Doctor
 }
 
 // NewPatient validates the data and builds an awake Patient. It returns an
@@ -68,6 +69,19 @@ func (p *Patient) Location() string {
 // Room returns the room where the patient sleeps, or nil if they have none.
 func (p *Patient) Room() *Room {
 	return p.room
+}
+
+// AssignedDoctor returns the doctor in charge of the patient, or nil if no
+// doctor has diagnosed them yet.
+func (p *Patient) AssignedDoctor() *Doctor {
+	return p.assignedDoctor
+}
+
+// assignDoctor makes d the doctor in charge of the patient. Only Doctor
+// calls it from DiagnosePatient, so the doctor and the patient always agree
+// on who is in charge.
+func (p *Patient) assignDoctor(d *Doctor) {
+	p.assignedDoctor = d
 }
 
 // moveToBed puts the asleep patient in a bed of room r. Only Room calls it,
