@@ -230,19 +230,27 @@ func (r *patientRow) set(p *hospital.Patient) {
 	r.Refresh()
 }
 
+// Colors shared by the views to show states.
+var (
+	green  = color.NRGBA{R: 0x16, G: 0xA3, B: 0x4A, A: 0xFF}
+	amber  = color.NRGBA{R: 0xD9, G: 0x77, B: 0x06, A: 0xFF}
+	indigo = color.NRGBA{R: 0x4F, G: 0x46, B: 0xE5, A: 0xFF}
+	gray   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
+)
+
 // stateColor returns the color that identifies patient state s in the GUI:
 // green when awake, amber when asleep in the hallway and indigo when asleep
 // in bed.
 func stateColor(s hospital.PatientState) color.Color {
 	switch s {
 	case hospital.Awake:
-		return color.NRGBA{R: 0x16, G: 0xA3, B: 0x4A, A: 0xFF} // green
+		return green
 	case hospital.AsleepInHallway:
-		return color.NRGBA{R: 0xD9, G: 0x77, B: 0x06, A: 0xFF} // amber
+		return amber
 	case hospital.AsleepInBed:
-		return color.NRGBA{R: 0x4F, G: 0x46, B: 0xE5, A: 0xFF} // indigo
+		return indigo
 	default:
-		return color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF} // gray, unknown state
+		return gray // unknown state
 	}
 }
 

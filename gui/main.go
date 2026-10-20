@@ -71,7 +71,7 @@ func newHeader(a *App) fyne.CanvasObject {
 func newTabs(a *App) *container.AppTabs {
 	return container.NewAppTabs(
 		container.NewTabItemWithIcon("Pacientes", theme.AccountIcon(), newPatientsTab(a)),
-		container.NewTabItemWithIcon("Cuartos", theme.HomeIcon(), comingSoon()),
+		container.NewTabItemWithIcon("Cuartos", theme.HomeIcon(), newRoomsTab(a)),
 		container.NewTabItemWithIcon("Consultas", theme.SearchIcon(), comingSoon()),
 		container.NewTabItemWithIcon("Historial", theme.HistoryIcon(), comingSoon()),
 		container.NewTabItemWithIcon("Música", theme.MediaMusicIcon(), comingSoon()),
