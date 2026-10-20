@@ -218,6 +218,7 @@ func (v *patientsView) sleepAttack() {
 	switch {
 	case err == nil:
 		v.a.lastAssign = &assignResult{patient: p, room: p.Room()}
+		v.a.notify(fmt.Sprintf("%s quedó dormido en el cuarto %d", p.Name(), p.Room().Number()))
 	case errors.Is(err, hospital.ErrNoRoomAvailable):
 		// The episode is registered anyway: the patient sleeps in the hallway.
 		v.a.lastAssign = &assignResult{patient: p, err: err}
@@ -234,6 +235,8 @@ func (v *patientsView) sleepAttack() {
 func (v *patientsView) wakeUp() {
 	if err := v.a.h.WakeUpPatient(v.selected); err != nil {
 		v.a.showError(err)
+	} else {
+		v.a.notify(v.selected.Name() + " se despertó. ¡Buenos días, mi llave!")
 	}
 	v.a.refreshAll()
 }
@@ -245,9 +248,11 @@ func (v *patientsView) assignRoom() {
 	r, err := v.a.h.AssignRoom(p)
 	v.a.lastAssign = &assignResult{patient: p, room: r, err: err}
 	switch {
+	case err == nil:
+		v.a.notify(fmt.Sprintf("%s pasó al cuarto %d", p.Name(), r.Number()))
 	case errors.Is(err, hospital.ErrNoRoomAvailable):
 		v.a.showWarning("Ombe, no hay cuartos libres: el paciente sigue en el pasillo")
-	case err != nil:
+	default:
 		v.a.showError(err)
 	}
 	v.a.refreshAll()

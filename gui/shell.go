@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 
 	"fyne.io/fyne/v2"
@@ -27,18 +28,25 @@ type page struct {
 	content  fyne.CanvasObject
 }
 
-// newShell builds the frame of the window for app a: the sidebar with one
-// item per page on the left and, on the right, the title of the current
-// page, the stats of the hospital and the content of the page.
+// pageSlide is how far, in pixels, a new page starts from its place before
+// it slides in.
+const pageSlide = 24
+
+// newShell builds the window content for app a: the sidebar with one item
+// per page on the left and, on the right, the title of the current page,
+// status chips and the content of the page. Notifications float over it.
 func newShell(a *App, pages []page) fyne.CanvasObject {
 	title := newHeading("", theme.SizeNameHeadingText)
 	subtitle := newCaption("")
 	subtitle.TextSize = 13
 	actions := container.NewHBox()
-	body := container.NewStack()
+	body := newSlider()
 	items := make([]*sidebarItem, len(pages))
+	current := -1
 
-	// show puts page i on screen and highlights its item in the menu.
+	// show puts page i on screen and highlights its item in the menu. The
+	// page slides in from below when the user goes down the menu and from
+	// above when they go up, so the motion points where they went.
 	show := func(i int) {
 		p := pages[i]
 		title.SetText(p.title)
@@ -46,8 +54,18 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 		subtitle.Refresh()
 		actions.Objects = p.actions
 		actions.Refresh()
-		body.Objects = []fyne.CanvasObject{p.content}
-		body.Refresh()
+		body.box.Objects = []fyne.CanvasObject{p.content}
+		if current >= 0 && i != current {
+			from := float32(pageSlide)
+			if i < current {
+				from = -pageSlide
+			}
+			body.jump(from)
+			body.slideTo(0, nil)
+		} else {
+			body.box.Refresh()
+		}
+		current = i
 		for j, item := range items {
 			item.setSelected(j == i)
 		}
@@ -65,15 +83,28 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 
 	heading := container.NewBorder(nil, nil, nil, container.NewCenter(actions),
 		container.NewVBox(title, container.New(layout.NewCustomPaddedLayout(0, 0, 8, 0), subtitle)))
-	top := container.NewVBox(heading, newStatsStrip(a))
+	chips := container.New(layout.NewCustomPaddedLayout(10, 14, 4, 0), newStatusChips(a))
+	// The header is opaque and is drawn after the body, so a page sliding
+	// up goes under it, as content goes under the toolbar of a Mac app.
+	header := container.NewStack(canvas.NewRectangle(canvasGray), container.NewVBox(heading, chips))
+
+	// Scroll edge effect: instead of a hard line under the header, the
+	// content fades out where it meets it.
+	fade := canvas.NewVerticalGradient(canvasGray, tint(canvasGray, 0))
+	fade.SetMinSize(fyne.NewSize(0, 14))
+	content := container.NewStack(body.box, container.NewBorder(fade, nil, nil, nil))
+
 	right := container.New(layout.NewCustomPaddedLayout(20, 20, 28, 28),
-		container.NewBorder(top, nil, nil, nil, body))
-	return container.NewBorder(nil, nil, newSidebar(menu), nil, right)
+		container.NewBorder(header, nil, nil, nil, content))
+
+	toasts := newToaster()
+	a.toasts = toasts
+	return container.NewStack(container.NewBorder(nil, nil, newSidebar(menu), nil, right), toasts.layer)
 }
 
 // newSidebar returns the gray column on the left: the app icon and name on
-// top, the menu in the middle and, at the bottom, a Junior pennant and the
-// flag of Colombia.
+// top, the menu in the middle and, at the bottom, a Junior pennant, the flag
+// of Colombia and the "reduce motion" switch.
 func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	name := canvas.NewText("Costeños", ink)
 	name.TextSize = 16
@@ -87,7 +118,8 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 		container.New(layout.NewCustomPaddedLayout(0, 0, 10, 0),
 			container.NewVBox(layout.NewSpacer(), cheer, newCaption("Rojiblanco de corazón"), layout.NewSpacer())))
 	madeIn := container.NewHBox(container.NewCenter(newColombiaFlag(20, 13)), newCaption("Hecho en la Costa"))
-	footer := newPanel(container.NewVBox(pennant, widget.NewSeparator(), madeIn))
+	motion := widget.NewCheck("Reducir movimiento", func(on bool) { reduceMotion = on })
+	footer := container.NewVBox(newPanel(container.NewVBox(pennant, widget.NewSeparator(), madeIn)), motion)
 
 	content := container.NewBorder(padded(4, brand), footer, nil, nil, container.NewVScroll(menu))
 
@@ -100,8 +132,9 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 }
 
 // sidebarItem is one entry of the menu: an icon in a colored square and a
-// title. It is a small widget of its own because it reacts to the mouse:
-// tapping it runs onTap and hovering it shades its background.
+// title. It is a small widget of its own because it reacts to the mouse: it
+// darkens as soon as the button goes down, runs onTap when it is released
+// and shades its background while the mouse is over it.
 type sidebarItem struct {
 	widget.BaseWidget
 	bg       *canvas.Rectangle
@@ -109,12 +142,15 @@ type sidebarItem struct {
 	badge    fyne.CanvasObject
 	onTap    func()
 	selected bool
+	hovered  bool
+	pressed  bool
 }
 
 // Compile-time checks: the build fails if sidebarItem stops reacting to
-// taps, to the mouse or stops showing the hand cursor.
+// taps, to the mouse buttons, to hovering or stops showing the hand cursor.
 var (
 	_ fyne.Tappable      = (*sidebarItem)(nil)
+	_ desktop.Mouseable  = (*sidebarItem)(nil)
 	_ desktop.Hoverable  = (*sidebarItem)(nil)
 	_ desktop.Cursorable = (*sidebarItem)(nil)
 )
@@ -141,19 +177,30 @@ func (s *sidebarItem) CreateRenderer() fyne.WidgetRenderer {
 		container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), row)))
 }
 
-// setSelected highlights the item with a soft tint of the main color when
-// on is true, as the sidebar of the Finder does.
-func (s *sidebarItem) setSelected(on bool) {
-	s.selected = on
+// paint sets the background and text of the item from its state: a soft
+// tint of the main color when selected, as the sidebar of the Finder does,
+// a darker shade while pressed and a light one while hovered.
+func (s *sidebarItem) paint() {
 	s.bg.FillColor = color.Transparent
 	s.label.Color = ink
 	s.label.TextStyle = fyne.TextStyle{}
-	if on {
+	switch {
+	case s.selected:
 		s.bg.FillColor = tint(caribe, 0x22)
 		s.label.Color = darker(caribe)
 		s.label.TextStyle = fyne.TextStyle{Bold: true}
+	case s.pressed:
+		s.bg.FillColor = color.NRGBA{A: 0x1C}
+	case s.hovered:
+		s.bg.FillColor = color.NRGBA{A: 0x0D}
 	}
 	s.Refresh()
+}
+
+// setSelected marks the item as the current page when on is true.
+func (s *sidebarItem) setSelected(on bool) {
+	s.selected = on
+	s.paint()
 }
 
 // Tapped runs the action of the item.
@@ -161,12 +208,23 @@ func (s *sidebarItem) Tapped(*fyne.PointEvent) {
 	s.onTap()
 }
 
+// MouseDown darkens the item at once, before the button is released, so
+// the app answers the very moment the user acts.
+func (s *sidebarItem) MouseDown(*desktop.MouseEvent) {
+	s.pressed = true
+	s.paint()
+}
+
+// MouseUp removes the pressed shade.
+func (s *sidebarItem) MouseUp(*desktop.MouseEvent) {
+	s.pressed = false
+	s.paint()
+}
+
 // MouseIn shades the item while the mouse is over it.
 func (s *sidebarItem) MouseIn(*desktop.MouseEvent) {
-	if !s.selected {
-		s.bg.FillColor = color.NRGBA{A: 0x0F}
-		s.bg.Refresh()
-	}
+	s.hovered = true
+	s.paint()
 }
 
 // MouseMoved does nothing; it is part of desktop.Hoverable.
@@ -174,10 +232,9 @@ func (s *sidebarItem) MouseMoved(*desktop.MouseEvent) {}
 
 // MouseOut removes the shade when the mouse leaves the item.
 func (s *sidebarItem) MouseOut() {
-	if !s.selected {
-		s.bg.FillColor = color.Transparent
-		s.bg.Refresh()
-	}
+	s.hovered = false
+	s.pressed = false
+	s.paint()
 }
 
 // Cursor shows a hand over the item, as over a link.
@@ -185,8 +242,54 @@ func (s *sidebarItem) Cursor() desktop.Cursor {
 	return desktop.PointerCursor
 }
 
-// newStatsStrip builds the row of counters shown on every page: patients,
-// patients asleep in the hallway, patients asleep in bed and free rooms. It
+// counts are the numbers of the hospital shown in the header and the
+// summary.
+type counts struct {
+	patients, inHallway, inBed, freeRooms int
+}
+
+// countHospital calculates counts from the getters of h.
+func countHospital(h *hospital.Hospital) counts {
+	c := counts{patients: len(h.Patients()), inHallway: len(h.PatientsInHallway())}
+	for _, p := range h.Patients() {
+		if p.State() == hospital.AsleepInBed {
+			c.inBed++
+		}
+	}
+	for _, r := range h.Rooms() {
+		if r.IsAvailable() {
+			c.freeRooms++
+		}
+	}
+	return c
+}
+
+// newStatusChips builds the small chips under the title of every page:
+// patients, patients asleep in the hallway, patients asleep in bed and free
+// rooms. They are the counters of the header, kept small so the page
+// itself stays the most important thing on screen.
+func newStatusChips(a *App) fyne.CanvasObject {
+	patients, inHallway, inBed, freeRooms := newPill(), newPill(), newPill(), newPill()
+	a.addRefresher(func() {
+		c := countHospital(a.h)
+		patients.set(plural(c.patients, "paciente", "pacientes"), caribe)
+		inHallway.set(fmt.Sprintf("%d en pasillo", c.inHallway), orange)
+		inBed.set(fmt.Sprintf("%d en cama", c.inBed), indigo)
+		freeRooms.set(plural(c.freeRooms, "cuarto libre", "cuartos libres"), green)
+	})
+	return container.NewHBox(patients.box, inHallway.box, inBed.box, freeRooms.box)
+}
+
+// plural returns n followed by one when n is 1 and by many otherwise, as in
+// "1 paciente" and "3 pacientes".
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// newStatsStrip builds the row of big stat cards of the summary page. It
 // registers a refresher that recalculates them from the hospital getters.
 func newStatsStrip(a *App) fyne.CanvasObject {
 	patients := newStatCard("Pacientes", theme.AccountIcon(), caribe)
@@ -195,26 +298,13 @@ func newStatsStrip(a *App) fyne.CanvasObject {
 	freeRooms := newStatCard("Cuartos libres", theme.HomeIcon(), green)
 
 	a.addRefresher(func() {
-		asleepInBed := 0
-		for _, p := range a.h.Patients() {
-			if p.State() == hospital.AsleepInBed {
-				asleepInBed++
-			}
-		}
-		free := 0
-		for _, r := range a.h.Rooms() {
-			if r.IsAvailable() {
-				free++
-			}
-		}
-		patients.set(len(a.h.Patients()))
-		inHallway.set(len(a.h.PatientsInHallway()))
-		inBed.set(asleepInBed)
-		freeRooms.set(free)
+		c := countHospital(a.h)
+		patients.set(c.patients)
+		inHallway.set(c.inHallway)
+		inBed.set(c.inBed)
+		freeRooms.set(c.freeRooms)
 	})
-
-	strip := container.NewGridWithColumns(4, patients.box, inHallway.box, inBed.box, freeRooms.box)
-	return container.New(layout.NewCustomPaddedLayout(16, 16, 0, 0), strip)
+	return container.NewGridWithColumns(4, patients.box, inHallway.box, inBed.box, freeRooms.box)
 }
 
 // newMusicPage is the Music page. The player arrives in another branch, so

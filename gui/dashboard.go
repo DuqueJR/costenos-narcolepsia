@@ -16,15 +16,16 @@ import (
 // recentEpisodes is how many episodes the dashboard shows.
 const recentEpisodes = 5
 
-// newDashboardPage builds the Home page of app a: a welcome banner, the bed
-// occupancy, the staff, the costeño saying of the day, quick actions and
-// the last episodes.
+// newDashboardPage builds the Summary page of app a: a welcome banner, the
+// big counters, the bed occupancy, the staff, the costeño saying of the
+// day, quick actions and the last episodes. It is called "Resumen" and not
+// "Inicio" because a specific name says what is inside.
 func newDashboardPage(a *App) page {
 	date := canvas.NewText("", white)
 	date.TextSize = 13
 	date.TextStyle = fyne.TextStyle{Bold: true}
 
-	beds := newMeter(caribe)
+	beds := newMeter(0, 0, caribe)
 	bedsCount := newHeading("", theme.SizeNameHeadingText)
 	bedsText := newCaption("")
 	occupancy := newTitledPanel("Ocupación de camas",
@@ -88,12 +89,13 @@ func newDashboardPage(a *App) page {
 
 	content := container.NewVBox(
 		newBanner(date),
+		newStatsStrip(a),
 		container.NewGridWithColumns(3, occupancy, staff, quote),
 		container.NewGridWithColumns(2, quick, last),
 	)
 	return page{
 		section:  "Hospital",
-		title:    "Inicio",
+		title:    "Resumen",
 		subtitle: "¿Qué más pues? Así va el hospital hoy",
 		icon:     theme.GridIcon(),
 		color:    caribe,

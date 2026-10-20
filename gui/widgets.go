@@ -256,25 +256,42 @@ func newActionButton(label string, icon fyne.Resource, importance widget.Importa
 }
 
 // meter is a thin capsule bar, like the ones of macOS, filled from the left
-// up to value/total. It is a widget with its own renderer because the width
-// of the fill depends on the size the meter gets.
+// up to a part between 0 and 1. It is a widget with its own renderer
+// because the width of the fill depends on the size the meter gets. When
+// the part changes, the fill moves there with a spring that starts from the
+// part on screen (shown), so a new change in the middle never makes it jump.
 type meter struct {
 	widget.BaseWidget
-	value, total float64
-	color        color.Color
+	shown float32 // part drawn right now, from 0 to 1
+	color color.Color
+	anim  *fyne.Animation
 }
 
-// newMeter returns an empty meter filled with color c.
-func newMeter(c color.Color) *meter {
-	m := &meter{color: c}
+// newMeter returns a meter filled up to value out of total with color c,
+// without animation.
+func newMeter(value, total float64, c color.Color) *meter {
+	m := &meter{shown: part(value, total), color: c}
 	m.ExtendBaseWidget(m)
 	return m
 }
 
-// set fills the meter up to value out of total, with color c.
+// set moves the fill to value out of total with a spring and paints it with
+// color c.
 func (m *meter) set(value, total float64, c color.Color) {
-	m.value, m.total, m.color = value, total, c
-	m.Refresh()
+	m.color = c
+	stopAnimation(m.anim)
+	m.anim = animateSpring(m.shown, part(value, total), responseMeter, func(v float32) {
+		m.shown = v
+		m.Refresh()
+	}, nil)
+}
+
+// part returns value/total between 0 and 1, or 0 if total is not positive.
+func part(value, total float64) float32 {
+	if total <= 0 {
+		return 0
+	}
+	return float32(min(max(value/total, 0), 1))
 }
 
 // CreateRenderer returns the renderer that draws the meter.
@@ -294,14 +311,10 @@ type meterRenderer struct {
 }
 
 // Layout makes the track as big as the meter and the fill as wide as the
-// part of value out of total.
+// part shown.
 func (r *meterRenderer) Layout(size fyne.Size) {
 	r.track.Resize(size)
-	part := 0.0
-	if r.m.total > 0 {
-		part = min(r.m.value/r.m.total, 1)
-	}
-	r.fill.Resize(fyne.NewSize(size.Width*float32(part), size.Height))
+	r.fill.Resize(fyne.NewSize(size.Width*r.m.shown, size.Height))
 }
 
 // MinSize is the smallest size of a meter: thin, as on macOS.

@@ -22,6 +22,7 @@ type App struct {
 	win        fyne.Window
 	lastAssign *assignResult // nil until the first assignment
 	refreshers []func()      // one per view, plus the header
+	toasts     *toaster      // set by the shell; nil in a window without it
 }
 
 // newApp returns an App that shows hospital h in window win.
@@ -46,6 +47,14 @@ func (a *App) refreshAll() {
 // showError shows err in an error dialog over the main window.
 func (a *App) showError(err error) {
 	dialog.ShowError(err, a.win)
+}
+
+// notify shows msg in a short notification that leaves by itself. It is the
+// feedback for actions that went well; warnings and errors use dialogs.
+func (a *App) notify(msg string) {
+	if a.toasts != nil {
+		a.toasts.show(msg)
+	}
 }
 
 // showWarning shows msg in an information dialog over the main window. It is

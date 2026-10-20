@@ -47,8 +47,9 @@ func newRoomCard(r *hospital.Room) fyne.CanvasObject {
 	state.set(roomStateLabel(r.State()), roomStateColor(r.State()))
 	title := newHeading("Cuarto "+strconv.Itoa(r.Number()), theme.SizeNameSubHeadingText)
 
-	beds := newMeter(roomStateColor(r.State()))
-	beds.set(float64(len(occupants)), float64(r.Capacity()), roomStateColor(r.State()))
+	// The cards are built again on every refresh, so the meter starts full
+	// at its value instead of animating from zero each time.
+	beds := newMeter(float64(len(occupants)), float64(r.Capacity()), roomStateColor(r.State()))
 	bedsText := newCaption(fmt.Sprintf("%d de %d camas ocupadas", len(occupants), r.Capacity()))
 
 	people := container.NewVBox()

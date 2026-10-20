@@ -46,12 +46,12 @@ func (a *App) showAdmitPatientForm() {
 		widget.NewFormItem("Edad", age),
 		widget.NewFormItem("Nivel", level),
 	}
-	a.showForm("Admitir paciente", items, func() error {
+	a.showForm("Admitir paciente", items, func() (string, error) {
 		p, err := hospital.NewPatient(text(id), text(name), number(age), levels[level.SelectedIndex()])
 		if err != nil {
-			return err
+			return "", err
 		}
-		return a.h.AdmitPatient(p)
+		return p.Name() + " ya está en la lista de pacientes", a.h.AdmitPatient(p)
 	})
 }
 
@@ -72,12 +72,12 @@ func (a *App) showHireDoctorForm() {
 		widget.NewFormItem("Edad", age),
 		widget.NewFormItem("Especialidad", specialty),
 	}
-	a.showForm("Contratar doctor", items, func() error {
+	a.showForm("Contratar doctor", items, func() (string, error) {
 		d, err := hospital.NewDoctor(text(id), text(name), number(age), strings.TrimSpace(specialty.Text))
 		if err != nil {
-			return err
+			return "", err
 		}
-		return a.h.HireDoctor(d)
+		return d.Name() + " ya hace parte del equipo, ¡bienvenido!", a.h.HireDoctor(d)
 	})
 }
 
@@ -94,12 +94,12 @@ func (a *App) showHireOrderlyForm() {
 		widget.NewFormItem("Nombre", name),
 		widget.NewFormItem("Edad", age),
 	}
-	a.showForm("Contratar camillero", items, func() error {
+	a.showForm("Contratar camillero", items, func() (string, error) {
 		o, err := hospital.NewOrderly(text(id), text(name), number(age))
 		if err != nil {
-			return err
+			return "", err
 		}
-		return a.h.HireStaff(o)
+		return o.Name() + " ya hace parte del equipo, ¡bienvenido!", a.h.HireStaff(o)
 	})
 }
 
@@ -117,27 +117,31 @@ func (a *App) showAddRoomForm() {
 		widget.NewFormItem("Número", roomNumber),
 		widget.NewFormItem("Camas", capacity),
 	}
-	a.showForm("Agregar cuarto", items, func() error {
+	a.showForm("Agregar cuarto", items, func() (string, error) {
 		r, err := hospital.NewRoom(number(roomNumber), number(capacity))
 		if err != nil {
-			return err
+			return "", err
 		}
-		return a.h.AddRoom(r)
+		return fmt.Sprintf("Cuarto %d listo pa' recibir dormilones", r.Number()), a.h.AddRoom(r)
 	})
 }
 
-// showForm shows a dialog with items. When the user confirms, it runs save
-// and, if save fails, shows its error; otherwise every view is refreshed.
-func (a *App) showForm(title string, items []*widget.FormItem, save func() error) {
+// showForm shows a dialog with items. When the user confirms, it runs save,
+// which returns the message for a notification and an error. If save fails
+// its error is shown; otherwise every view is refreshed and the message
+// rises as a notification.
+func (a *App) showForm(title string, items []*widget.FormItem, save func() (string, error)) {
 	d := dialog.NewForm(title, "Guardar", "Cancelar", items, func(confirmed bool) {
 		if !confirmed {
 			return
 		}
-		if err := save(); err != nil {
+		msg, err := save()
+		if err != nil {
 			a.showError(fmt.Errorf("%s: %w", strings.ToLower(title), err))
 			return
 		}
 		a.refreshAll()
+		a.notify("¡Listo, mi llave! " + msg)
 	}, a.win)
 	d.Resize(fyne.NewSize(440, 0))
 	d.Show()

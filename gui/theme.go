@@ -2,6 +2,9 @@ package main
 
 import (
 	"image/color"
+	"os"
+	"path/filepath"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -12,15 +15,16 @@ import (
 // Palette of the GUI: the clean grays of Apple interfaces plus the colors of
 // the Caribbean coast, the sea and the sun.
 var (
-	canvasGray = color.NRGBA{R: 0xF5, G: 0xF5, B: 0xF7, A: 0xFF} // window background
-	sidebarBg  = color.NRGBA{R: 0xEE, G: 0xEE, B: 0xF2, A: 0xFF} // sidebar
-	fillGray   = color.NRGBA{R: 0xE9, G: 0xE9, B: 0xEC, A: 0xFF} // buttons and segmented track
-	fieldGray  = color.NRGBA{R: 0xF2, G: 0xF2, B: 0xF5, A: 0xFF} // text fields
-	hairline   = color.NRGBA{R: 0xE3, G: 0xE3, B: 0xE8, A: 0xFF} // separators
-	white      = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // cards
-	ink        = color.NRGBA{R: 0x1D, G: 0x1D, B: 0x1F, A: 0xFF} // text
-	muted      = color.NRGBA{R: 0x6E, G: 0x6E, B: 0x73, A: 0xFF} // secondary text
-	faint      = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xA6, A: 0xFF} // placeholders and disabled text
+	canvasGray  = color.NRGBA{R: 0xF5, G: 0xF5, B: 0xF7, A: 0xFF} // window background
+	sidebarBg   = color.NRGBA{R: 0xEE, G: 0xEE, B: 0xF2, A: 0xFF} // sidebar
+	fillGray    = color.NRGBA{R: 0xE9, G: 0xE9, B: 0xEC, A: 0xFF} // buttons and segmented track
+	fieldGray   = color.NRGBA{R: 0xF2, G: 0xF2, B: 0xF5, A: 0xFF} // text fields
+	hairline    = color.NRGBA{R: 0xE3, G: 0xE3, B: 0xE8, A: 0xFF} // separators
+	fieldBorder = color.NRGBA{R: 0xD1, G: 0xD1, B: 0xD6, A: 0xFF} // borders of fields and checkboxes
+	white       = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // cards
+	ink         = color.NRGBA{R: 0x1D, G: 0x1D, B: 0x1F, A: 0xFF} // text
+	muted       = color.NRGBA{R: 0x6E, G: 0x6E, B: 0x73, A: 0xFF} // secondary text
+	faint       = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xA6, A: 0xFF} // placeholders and disabled text
 
 	caribe = color.NRGBA{R: 0x0A, G: 0x7E, B: 0xA4, A: 0xFF} // main color: the Caribbean sea
 	sky    = color.NRGBA{R: 0x3F, G: 0xB8, B: 0xD9, A: 0xFF} // light end of the sea gradient
@@ -35,11 +39,37 @@ var (
 	gray   = color.NRGBA{R: 0x8E, G: 0x8E, B: 0x93, A: 0xFF}
 )
 
-// caribeTheme is the light theme of the GUI. It only changes some colors
-// and sizes; fonts, icons and every other value come from the default Fyne
-// theme. It ignores the variant, so the GUI stays light even if the system
-// uses dark mode.
-type caribeTheme struct{}
+// caribeTheme is the light theme of the GUI. It changes some colors and
+// sizes and uses the font of the system; icons and every other value come
+// from the default Fyne theme. It ignores the variant, so the GUI stays
+// light even if the system uses dark mode.
+type caribeTheme struct {
+	regular, bold, italic, boldItalic fyne.Resource // nil means the Fyne font
+}
+
+// newCaribeTheme returns the theme with the font of the system when it can
+// find it: Segoe UI, the font of Windows apps, as Apple apps use the font of
+// their system. On other systems, or if a file is missing, that style keeps
+// the font that comes with Fyne.
+func newCaribeTheme() caribeTheme {
+	var t caribeTheme
+	if runtime.GOOS != "windows" {
+		return t
+	}
+	fonts := filepath.Join(os.Getenv("WINDIR"), "Fonts")
+	load := func(name string) fyne.Resource {
+		r, err := fyne.LoadResourceFromPath(filepath.Join(fonts, name))
+		if err != nil {
+			return nil // not a failure: Font falls back to the Fyne font
+		}
+		return r
+	}
+	t.regular = load("segoeui.ttf")
+	t.bold = load("segoeuib.ttf")
+	t.italic = load("segoeuii.ttf")
+	t.boldItalic = load("segoeuiz.ttf")
+	return t
+}
 
 // Compile-time check: the build fails if caribeTheme stops being a fyne.Theme.
 var _ fyne.Theme = caribeTheme{}
@@ -54,7 +84,7 @@ func (caribeTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Co
 	case theme.ColorNameInputBackground:
 		return fieldGray
 	case theme.ColorNameInputBorder:
-		return fieldGray // borderless fields; the focus color still draws a ring
+		return fieldBorder // a subtle border, as macOS text fields and checkboxes have
 	case theme.ColorNameOverlayBackground, theme.ColorNameMenuBackground:
 		return white
 	case theme.ColorNameSeparator:
@@ -89,9 +119,25 @@ func (caribeTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Co
 	return theme.DefaultTheme().Color(name, theme.VariantLight)
 }
 
-// Font returns the default Fyne font for style s.
-func (caribeTheme) Font(s fyne.TextStyle) fyne.Resource {
-	return theme.DefaultTheme().Font(s)
+// Font returns the system font for style s, or the Fyne font when there is
+// none. Monospace and symbol text always use the Fyne fonts.
+func (t caribeTheme) Font(s fyne.TextStyle) fyne.Resource {
+	var font fyne.Resource
+	switch {
+	case s.Monospace, s.Symbol:
+	case s.Bold && s.Italic:
+		font = t.boldItalic
+	case s.Bold:
+		font = t.bold
+	case s.Italic:
+		font = t.italic
+	default:
+		font = t.regular
+	}
+	if font == nil {
+		return theme.DefaultTheme().Font(s)
+	}
+	return font
 }
 
 // Icon returns the default Fyne icon called name.
