@@ -32,6 +32,7 @@ func main() {
 // newPages builds every page of the sidebar for app a, in menu order.
 func newPages(a *App) []page {
 	return []page{
+		newDashboardPage(a),
 		newPatientsPage(a),
 		newRoomsPage(a),
 		newStaffPage(a),
