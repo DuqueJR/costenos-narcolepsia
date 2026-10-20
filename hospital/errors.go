@@ -16,4 +16,16 @@ var (
 	// ErrAlreadyAwake is returned when a patient who is already awake is
 	// asked to wake up.
 	ErrAlreadyAwake = errors.New("patient already awake")
+
+	// ErrRoomFull is returned when a patient tries to occupy a room with
+	// no free beds.
+	ErrRoomFull = errors.New("room is full")
+
+	// ErrAlreadyInRoom is returned when a patient tries to occupy a room
+	// they are already in.
+	ErrAlreadyInRoom = errors.New("patient already in room")
+
+	// ErrNotInRoom is returned when releasing a patient who is not in the
+	// room.
+	ErrNotInRoom = errors.New("patient not in room")
 )
