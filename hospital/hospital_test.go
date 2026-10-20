@@ -622,3 +622,96 @@ func TestHospitalHandleSleepAttackErrors(t *testing.T) {
 		t.Errorf("len(History()) = %d, want 0", n)
 	}
 }
+
+// admitTestPatient builds a patient with the given level, admits it to h and
+// returns it, or stops the test.
+func admitTestPatient(t *testing.T, h *Hospital, id string, level NarcolepsyLevel) *Patient {
+	t.Helper()
+	p, err := NewPatient(id, "Patient "+id, 30, level)
+	if err != nil {
+		t.Fatalf("NewPatient(%q) error: %v", id, err)
+	}
+	if err := h.AdmitPatient(p); err != nil {
+		t.Fatalf("AdmitPatient(%s) error: %v", id, err)
+	}
+	return p
+}
+
+func TestHospitalPatientsInHallway(t *testing.T) {
+	h := newTestHospitalWithStaff(t, newTestRoom(t, 101, 1))
+	inBed := admitTestPatient(t, h, "P1", Moderate)
+	inHallway := admitTestPatient(t, h, "P2", Moderate)
+	admitTestPatient(t, h, "P3", Moderate) // stays awake
+
+	if got := h.PatientsInHallway(); got == nil || len(got) != 0 {
+		t.Errorf("PatientsInHallway() before any attack = %v, want an empty non-nil slice", got)
+	}
+
+	if _, err := h.HandleSleepAttack(inBed, "cafeteria"); err != nil {
+		t.Fatalf("HandleSleepAttack(P1) error: %v", err)
+	}
+	if _, err := h.HandleSleepAttack(inHallway, "library"); !errors.Is(err, ErrNoRoomAvailable) {
+		t.Fatalf("HandleSleepAttack(P2) error = %v, want %v", err, ErrNoRoomAvailable)
+	}
+
+	got := h.PatientsInHallway()
+	if len(got) != 1 || got[0] != inHallway {
+		t.Errorf("PatientsInHallway() = %v, want only %s", got, inHallway.ID())
+	}
+}
+
+func TestHospitalSevereReport(t *testing.T) {
+	h := newTestHospitalWithStaff(t) // no rooms: everyone sleeps in the hallway
+	twoEpisodes := admitTestPatient(t, h, "P1", Severe)
+	noEpisodes := admitTestPatient(t, h, "P2", Severe)
+	mild := admitTestPatient(t, h, "P3", Mild)
+
+	// P1 falls asleep twice today and P3 (Mild) once.
+	for _, p := range []*Patient{twoEpisodes, mild, twoEpisodes} {
+		if _, err := h.HandleSleepAttack(p, "cafeteria"); !errors.Is(err, ErrNoRoomAvailable) {
+			t.Fatalf("HandleSleepAttack(%s) error = %v, want %v", p.ID(), err, ErrNoRoomAvailable)
+		}
+		if err := h.WakeUpPatient(p); err != nil {
+			t.Fatalf("WakeUpPatient(%s) error: %v", p.ID(), err)
+		}
+	}
+	// An episode from yesterday must not be counted.
+	yesterday := time.Now().AddDate(0, 0, -1)
+	old := newEpisodeRecord("OLD-E1", yesterday, twoEpisodes, newTestDoctor(t, "D-99"), "library", nil)
+	if err := h.RegisterEpisode(old); err != nil {
+		t.Fatalf("RegisterEpisode error: %v", err)
+	}
+
+	report := h.SevereReport()
+	if len(report) != 2 {
+		t.Errorf("len(SevereReport()) = %d, want 2", len(report))
+	}
+	if n, ok := report[twoEpisodes]; !ok || n != 2 {
+		t.Errorf("report[%s] = %d (present %t), want 2", twoEpisodes.ID(), n, ok)
+	}
+	if n, ok := report[noEpisodes]; !ok || n != 0 {
+		t.Errorf("report[%s] = %d (present %t), want 0", noEpisodes.ID(), n, ok)
+	}
+	if _, ok := report[mild]; ok {
+		t.Errorf("report contains Mild patient %s", mild.ID())
+	}
+}
+
+func TestSameDay(t *testing.T) {
+	base := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.Local)
+	tests := []struct {
+		name string
+		b    time.Time
+		want bool
+	}{
+		{"same moment", base, true},
+		{"end of the same day", base.Add(23*time.Hour + 59*time.Minute), true},
+		{"next day", base.AddDate(0, 0, 1), false},
+		{"same day and month, other year", base.AddDate(-1, 0, 0), false},
+	}
+	for _, tt := range tests {
+		if got := sameDay(base, tt.b); got != tt.want {
+			t.Errorf("%s: sameDay = %t, want %t", tt.name, got, tt.want)
+		}
+	}
+}
