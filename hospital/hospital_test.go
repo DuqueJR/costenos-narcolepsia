@@ -403,7 +403,7 @@ func TestHospitalDispatchRoundRobin(t *testing.T) {
 
 	want := []Attender{doctor, orderly, doctor, orderly}
 	for i, w := range want {
-		got, err := h.dispatch()
+		got, err := h.dispatchLocked()
 		if err != nil {
 			t.Fatalf("dispatch #%d error: %v", i+1, err)
 		}
@@ -417,7 +417,7 @@ func TestHospitalFlowErrors(t *testing.T) {
 	h := NewHospital("Test Hospital")
 	_, assignNilErr := h.AssignRoom(nil)
 	_, assignAwakeErr := h.AssignRoom(newTestPatient(t, "P1"))
-	_, dispatchErr := h.dispatch()
+	_, dispatchErr := h.dispatchLocked()
 
 	tests := []struct {
 		name string

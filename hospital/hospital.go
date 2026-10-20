@@ -33,7 +33,7 @@ func (h *Hospital) AdmitPatient(p *Patient) error {
 	if p == nil {
 		return fmt.Errorf("admit patient: nil patient: %w", ErrInvalidData)
 	}
-	if _, err := h.FindPatient(p.ID()); err == nil {
+	if _, err := h.findPatientLocked(p.ID()); err == nil {
 		return fmt.Errorf("admit patient %s: %w", p.ID(), ErrDuplicateID)
 	}
 	h.patients = append(h.patients, p)
@@ -45,6 +45,11 @@ func (h *Hospital) AdmitPatient(p *Patient) error {
 // error wrapping ErrInvalidData if a is nil, or ErrDuplicateID if a staff
 // member with the same ID is already hired.
 func (h *Hospital) HireStaff(a Attender) error {
+	return h.hireStaffLocked(a)
+}
+
+// hireStaffLocked is HireStaff without taking the lock.
+func (h *Hospital) hireStaffLocked(a Attender) error {
 	if a == nil {
 		return fmt.Errorf("hire staff: nil attender: %w", ErrInvalidData)
 	}
@@ -65,7 +70,7 @@ func (h *Hospital) HireDoctor(d *Doctor) error {
 	if d == nil {
 		return fmt.Errorf("hire doctor: nil doctor: %w", ErrInvalidData)
 	}
-	if err := h.HireStaff(d); err != nil {
+	if err := h.hireStaffLocked(d); err != nil {
 		return fmt.Errorf("hire doctor: %w", err)
 	}
 	h.doctors = append(h.doctors, d)
@@ -79,7 +84,7 @@ func (h *Hospital) AddRoom(r *Room) error {
 	if r == nil {
 		return fmt.Errorf("add room: nil room: %w", ErrInvalidData)
 	}
-	if _, err := h.FindRoom(r.Number()); err == nil {
+	if _, err := h.findRoomLocked(r.Number()); err == nil {
 		return fmt.Errorf("add room %d: %w", r.Number(), ErrDuplicateID)
 	}
 	h.rooms = append(h.rooms, r)
@@ -93,6 +98,11 @@ func (h *Hospital) AddRoom(r *Room) error {
 // In that last case the patient stays asleep in the hallway. AssignRoom
 // never creates rooms.
 func (h *Hospital) AssignRoom(p *Patient) (*Room, error) {
+	return h.assignRoomLocked(p)
+}
+
+// assignRoomLocked is AssignRoom without taking the lock.
+func (h *Hospital) assignRoomLocked(p *Patient) (*Room, error) {
 	if p == nil {
 		return nil, fmt.Errorf("assign room: nil patient: %w", ErrInvalidData)
 	}
@@ -110,10 +120,10 @@ func (h *Hospital) AssignRoom(p *Patient) (*Room, error) {
 	return nil, fmt.Errorf("assign room to %s: %w", p.ID(), ErrNoRoomAvailable)
 }
 
-// dispatch chooses the staff member who attends the next emergency, taking
-// turns over the whole staff (round-robin). It returns an error wrapping
-// ErrNoStaff if the hospital has no staff.
-func (h *Hospital) dispatch() (Attender, error) {
+// dispatchLocked chooses the staff member who attends the next emergency,
+// taking turns over the whole staff (round-robin). It returns an error
+// wrapping ErrNoStaff if the hospital has no staff.
+func (h *Hospital) dispatchLocked() (Attender, error) {
 	if len(h.staff) == 0 {
 		return nil, fmt.Errorf("dispatch: %w", ErrNoStaff)
 	}
@@ -125,6 +135,11 @@ func (h *Hospital) dispatch() (Attender, error) {
 // RegisterEpisode adds record rec to the history of the hospital. It
 // returns an error wrapping ErrInvalidData if rec has no patient.
 func (h *Hospital) RegisterEpisode(rec EpisodeRecord) error {
+	return h.registerEpisodeLocked(rec)
+}
+
+// registerEpisodeLocked is RegisterEpisode without taking the lock.
+func (h *Hospital) registerEpisodeLocked(rec EpisodeRecord) error {
 	if rec.Patient() == nil {
 		return fmt.Errorf("register episode: record without patient: %w", ErrInvalidData)
 	}
@@ -151,11 +166,11 @@ func (h *Hospital) HandleSleepAttack(p *Patient, location string) (EpisodeRecord
 	}
 	// Not having a room does not stop the flow: the patient is attended in
 	// the hallway and roomErr is returned at the end.
-	_, roomErr := h.AssignRoom(p)
+	_, roomErr := h.assignRoomLocked(p)
 	if roomErr != nil && !errors.Is(roomErr, ErrNoRoomAvailable) {
 		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", roomErr)
 	}
-	attender, err := h.dispatch()
+	attender, err := h.dispatchLocked()
 	if err != nil {
 		return EpisodeRecord{}, fmt.Errorf("handle sleep attack of %s: %w", p.ID(), err)
 	}
@@ -163,7 +178,7 @@ func (h *Hospital) HandleSleepAttack(p *Patient, location string) (EpisodeRecord
 	if err != nil {
 		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", err)
 	}
-	if err := h.RegisterEpisode(rec); err != nil {
+	if err := h.registerEpisodeLocked(rec); err != nil {
 		return EpisodeRecord{}, fmt.Errorf("handle sleep attack: %w", err)
 	}
 	return rec, roomErr
@@ -234,6 +249,11 @@ func sameDay(a, b time.Time) bool {
 // FindPatient returns the admitted patient with the given id. It returns an
 // error wrapping ErrNotFound if there is none.
 func (h *Hospital) FindPatient(id string) (*Patient, error) {
+	return h.findPatientLocked(id)
+}
+
+// findPatientLocked is FindPatient without taking the lock.
+func (h *Hospital) findPatientLocked(id string) (*Patient, error) {
 	for _, p := range h.patients {
 		if p.ID() == id {
 			return p, nil
@@ -256,6 +276,11 @@ func (h *Hospital) FindDoctor(id string) (*Doctor, error) {
 // FindRoom returns the room with the given number. It returns an error
 // wrapping ErrNotFound if there is none.
 func (h *Hospital) FindRoom(number int) (*Room, error) {
+	return h.findRoomLocked(number)
+}
+
+// findRoomLocked is FindRoom without taking the lock.
+func (h *Hospital) findRoomLocked(number int) (*Room, error) {
 	for _, r := range h.rooms {
 		if r.Number() == number {
 			return r, nil
