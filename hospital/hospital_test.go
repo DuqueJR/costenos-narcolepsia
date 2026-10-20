@@ -200,3 +200,59 @@ func TestDoctorDiagnoseTwice(t *testing.T) {
 		t.Errorf("len(Patients()) = %d, want 1", n)
 	}
 }
+
+// newTestOrderly builds a valid orderly or stops the test.
+func newTestOrderly(t *testing.T, id string) *Orderly {
+	t.Helper()
+	o, err := NewOrderly(id, "Orderly "+id, 28)
+	if err != nil {
+		t.Fatalf("NewOrderly(%q) error: %v", id, err)
+	}
+	return o
+}
+
+func TestStaffAttendPolymorphism(t *testing.T) {
+	doctor := newTestDoctor(t, "D-01")
+	orderly := newTestOrderly(t, "O-01")
+	staff := []Attender{doctor, orderly}
+
+	patients := []*Patient{newTestPatient(t, "P1"), newTestPatient(t, "P2")}
+	for _, p := range patients {
+		if err := p.SufferSleepAttack("cafeteria"); err != nil {
+			t.Fatalf("SufferSleepAttack(%s) error: %v", p.ID(), err)
+		}
+	}
+
+	for i, a := range staff {
+		rec, err := a.Attend(patients[i], "cafeteria")
+		if err != nil {
+			t.Fatalf("%s Attend error: %v", a.ID(), err)
+		}
+		if rec.AttendedBy() != a {
+			t.Errorf("AttendedBy() = %s, want %s", rec.AttendedBy().ID(), a.ID())
+		}
+		if want := a.ID() + "-E1"; rec.ID() != want {
+			t.Errorf("record ID = %q, want %q", rec.ID(), want)
+		}
+	}
+
+	if orderly.Attended() != 1 {
+		t.Errorf("Attended() = %d, want 1", orderly.Attended())
+	}
+	if patients[1].AssignedDoctor() != nil {
+		t.Errorf("orderly assigned doctor %v, want nil", patients[1].AssignedDoctor())
+	}
+}
+
+func TestOrderlyAttendAwakePatient(t *testing.T) {
+	o := newTestOrderly(t, "O-01")
+	p := newTestPatient(t, "P1")
+
+	_, err := o.Attend(p, "cafeteria")
+	if !errors.Is(err, ErrPatientAwake) {
+		t.Errorf("Attend error = %v, want %v", err, ErrPatientAwake)
+	}
+	if o.Attended() != 0 {
+		t.Errorf("Attended() = %d, want 0", o.Attended())
+	}
+}
