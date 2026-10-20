@@ -940,5 +940,5 @@ El uso de IA está permitido en todo el ejercicio. Las herramientas usadas, los 
 El detalle de las imágenes está en [`gui/images/CREDITS.md`](gui/images/CREDITS.md).
 
 <div align="center">
-<sub>Hecho en la Costa 🇨🇴 · ¡Junior, tu papá!</sub>
+<sub>DUQUEJR</sub>
 </div>
