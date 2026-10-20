@@ -37,6 +37,5 @@ func newPages(a *App) []page {
 		newStaffPage(a),
 		newQueriesPage(a),
 		newHistoryPage(a),
-		newMusicPage(),
 	}
 }

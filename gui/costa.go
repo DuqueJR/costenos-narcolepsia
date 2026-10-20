@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,10 +11,9 @@ import (
 )
 
 // The costeño details of the GUI. The sombrero and the Junior flag are
-// pictures (see images/CREDITS.md). The vueltiao stripe, the flag of
-// Colombia and the Carnaval garland are canvas.Raster objects: Fyne calls a
-// Go function once per pixel and paints the color it returns, so they need
-// no image files.
+// pictures (see images/CREDITS.md). The vueltiao stripe and the flag of
+// Colombia are canvas.Raster objects: Fyne calls a Go function once per
+// pixel and paints the color it returns, so they need no image files.
 
 // noColor is a fully transparent pixel. It must be a color.NRGBA, like the
 // other pixels: Fyne picks the kind of image from the type of the first
@@ -111,26 +109,6 @@ func newColombiaFlag(width, height float32) fyne.CanvasObject {
 		default:
 			return flagRed
 		}
-	})
-}
-
-// garlandColors are the colors of the little flags of the garland.
-var garlandColors = []color.NRGBA{juniorRed, flagGold, green, accent, orange, flagBlue}
-
-// newGarland returns a string of little triangular flags like the ones that
-// hang over the streets during the Carnaval de Barranquilla. The string has
-// color thread, so it shows over the sea and over a white card.
-func newGarland(width, height float32, thread color.Color) fyne.CanvasObject {
-	return newRaster(width, height, func(x, y, _, h int) color.Color {
-		if y < max(h/9, 1) {
-			return thread
-		}
-		i, t := x/h, float64(x%h)/float64(h) // flag number and position inside it
-		depth := 1 - math.Abs(t-0.5)*2       // 1 in the middle, 0 at the sides
-		if t > 0.08 && t < 0.92 && float64(y)/float64(h) <= depth {
-			return garlandColors[i%len(garlandColors)]
-		}
-		return noColor
 	})
 }
 

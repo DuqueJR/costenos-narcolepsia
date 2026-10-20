@@ -314,20 +314,3 @@ func newStatsStrip(a *App) fyne.CanvasObject {
 	})
 	return container.NewGridWithColumns(4, patients.box, inHallway.box, inBed.box, freeRooms.box)
 }
-
-// newMusicPage is the Music page. The player arrives in another branch, so
-// for now it only says so, with a hat and a Carnaval garland.
-func newMusicPage() page {
-	text := newHeading("Próximamente", theme.SizeNameSubHeadingText)
-	text.Alignment = fyne.TextAlignCenter
-	hint := newCaption("Champeta, vallenato y cumbia pa' la sala de espera")
-	return page{
-		section:  "Extras",
-		title:    "Música",
-		subtitle: "Que suene el picó… pero bajito, que hay pacientes durmiendo",
-		icon:     icon("music-notes"),
-		content: newPanel(container.NewBorder(newGarland(10, 22, hairline), nil, nil, nil,
-			container.NewCenter(container.NewVBox(
-				container.NewCenter(newSombrero(150, 100)), text, container.NewCenter(hint))))),
-	}
-}
