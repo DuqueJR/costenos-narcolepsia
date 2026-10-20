@@ -3,6 +3,8 @@ package hospital
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 )
@@ -91,15 +93,6 @@ func TestRoomReleaseNotInRoom(t *testing.T) {
 	err := r.Release(p)
 	if !errors.Is(err, ErrNotInRoom) {
 		t.Errorf("Release error = %v, want %v", err, ErrNotInRoom)
-	}
-}
-
-func TestPatientWakeUpAlreadyAwake(t *testing.T) {
-	p := newTestPatient(t, "P1")
-
-	err := p.WakeUp()
-	if !errors.Is(err, ErrAlreadyAwake) {
-		t.Errorf("WakeUp error = %v, want %v", err, ErrAlreadyAwake)
 	}
 }
 
@@ -397,75 +390,6 @@ func newAsleepPatient(t *testing.T, id string) *Patient {
 	return p
 }
 
-func TestHospitalAssignRoomAvailable(t *testing.T) {
-	full := newTestRoom(t, 101, 1)
-	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
-		t.Fatalf("Occupy error: %v", err)
-	}
-	free := newTestRoom(t, 102, 1)
-	h := newTestHospitalWithRooms(t, full, free)
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if err != nil {
-		t.Fatalf("AssignRoom error: %v", err)
-	}
-	if r != free {
-		t.Fatalf("AssignRoom room = %v, want room %d", r, free.Number())
-	}
-	if r.State() != Occupied {
-		t.Errorf("room state = %v, want %v", r.State(), Occupied)
-	}
-	if p.State() != AsleepInBed {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInBed)
-	}
-	if p.Room() != r {
-		t.Errorf("patient room = %v, want room %d", p.Room(), r.Number())
-	}
-}
-
-func TestHospitalAssignRoomNoneAvailable(t *testing.T) {
-	full := newTestRoom(t, 101, 1)
-	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
-		t.Fatalf("Occupy error: %v", err)
-	}
-	h := newTestHospitalWithRooms(t, full)
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if !errors.Is(err, ErrNoRoomAvailable) {
-		t.Errorf("AssignRoom error = %v, want %v", err, ErrNoRoomAvailable)
-	}
-	if r != nil {
-		t.Errorf("AssignRoom room = %v, want nil", r)
-	}
-	if p.State() != AsleepInHallway {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
-	}
-	if p.Room() != nil {
-		t.Errorf("patient room = %v, want nil", p.Room())
-	}
-	if n := len(h.Rooms()); n != 1 {
-		t.Errorf("len(Rooms()) = %d, want 1: AssignRoom must not create rooms", n)
-	}
-}
-
-func TestHospitalAssignRoomWithoutRooms(t *testing.T) {
-	h := NewHospital("Test Hospital")
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if !errors.Is(err, ErrNoRoomAvailable) || r != nil {
-		t.Errorf("AssignRoom = room %v, error %v, want nil and %v", r, err, ErrNoRoomAvailable)
-	}
-	if p.State() != AsleepInHallway {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
-	}
-	if n := len(h.Rooms()); n != 0 {
-		t.Errorf("len(Rooms()) = %d, want 0: AssignRoom must not create rooms", n)
-	}
-}
-
 func TestHospitalDispatchRoundRobin(t *testing.T) {
 	h := NewHospital("Test Hospital")
 	doctor := newTestDoctor(t, "D-01")
@@ -543,6 +467,107 @@ func newTestHospitalWithStaff(t *testing.T, rooms ...*Room) *Hospital {
 		t.Fatalf("HireStaff error: %v", err)
 	}
 	return h
+}
+
+// newTestHospital builds a hospital with a doctor (D-01), an orderly (O-01),
+// the given number of single rooms (101, 102...) and three admitted awake
+// patients (P1, P2, P3), or stops the test. It returns the patients in the
+// order they were admitted.
+func newTestHospital(t *testing.T, rooms int) (*Hospital, []*Patient) {
+	t.Helper()
+	var rs []*Room
+	for i := 0; i < rooms; i++ {
+		rs = append(rs, newTestRoom(t, 101+i, 1))
+	}
+	h := newTestHospitalWithStaff(t, rs...)
+	patients := []*Patient{
+		admitTestPatient(t, h, "P1", Moderate),
+		admitTestPatient(t, h, "P2", Moderate),
+		admitTestPatient(t, h, "P3", Moderate),
+	}
+	return h, patients
+}
+
+func TestAssignRoom_FreeRoom(t *testing.T) {
+	h, patients := newTestHospital(t, 2)
+	first, second := patients[0], patients[1]
+	full, free := h.Rooms()[0], h.Rooms()[1]
+
+	// first takes room 101, so second must skip it and get room 102.
+	if err := first.SufferSleepAttack("cafeteria"); err != nil {
+		t.Fatalf("SufferSleepAttack(%s) error: %v", first.ID(), err)
+	}
+	if r, err := h.AssignRoom(first); err != nil || r != full {
+		t.Fatalf("AssignRoom(%s) = room %v, error %v, want room %d", first.ID(), r, err, full.Number())
+	}
+	if err := second.SufferSleepAttack("library"); err != nil {
+		t.Fatalf("SufferSleepAttack(%s) error: %v", second.ID(), err)
+	}
+
+	r, err := h.AssignRoom(second)
+	if err != nil {
+		t.Fatalf("AssignRoom(%s) error: %v", second.ID(), err)
+	}
+	if r != free {
+		t.Fatalf("AssignRoom(%s) room = %v, want room %d", second.ID(), r, free.Number())
+	}
+	if r.State() != Occupied {
+		t.Errorf("room state = %v, want %v", r.State(), Occupied)
+	}
+	if second.State() != AsleepInBed {
+		t.Errorf("patient state = %v, want %v", second.State(), AsleepInBed)
+	}
+	if second.Room() != r {
+		t.Errorf("patient room = %v, want room %d", second.Room(), r.Number())
+	}
+	if n := len(full.Occupants()); n != 1 {
+		t.Errorf("room %d has %d occupants, want 1", full.Number(), n)
+	}
+}
+
+func TestAssignRoom_NoRoomAvailable(t *testing.T) {
+	tests := []struct {
+		name  string
+		rooms int
+	}{
+		{"all rooms full", 1},
+		{"hospital without rooms", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, patients := newTestHospital(t, tt.rooms)
+			// Fill every room, so the last patient has nowhere to go.
+			for _, p := range patients[:tt.rooms] {
+				if err := p.SufferSleepAttack("cafeteria"); err != nil {
+					t.Fatalf("SufferSleepAttack(%s) error: %v", p.ID(), err)
+				}
+				if _, err := h.AssignRoom(p); err != nil {
+					t.Fatalf("AssignRoom(%s) error: %v", p.ID(), err)
+				}
+			}
+			p := patients[2]
+			if err := p.SufferSleepAttack("library"); err != nil {
+				t.Fatalf("SufferSleepAttack(%s) error: %v", p.ID(), err)
+			}
+
+			r, err := h.AssignRoom(p)
+			if !errors.Is(err, ErrNoRoomAvailable) {
+				t.Errorf("AssignRoom error = %v, want %v", err, ErrNoRoomAvailable)
+			}
+			if r != nil {
+				t.Errorf("AssignRoom room = %v, want nil", r)
+			}
+			if p.State() != AsleepInHallway {
+				t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
+			}
+			if p.Room() != nil {
+				t.Errorf("patient room = %v, want nil", p.Room())
+			}
+			if n := len(h.Rooms()); n != tt.rooms {
+				t.Errorf("len(Rooms()) = %d, want %d: AssignRoom must not create rooms", n, tt.rooms)
+			}
+		})
+	}
 }
 
 func TestHospitalHandleSleepAttackFillsRooms(t *testing.T) {
@@ -656,11 +681,9 @@ func admitTestPatient(t *testing.T, h *Hospital, id string, level NarcolepsyLeve
 	return p
 }
 
-func TestHospitalPatientsInHallway(t *testing.T) {
-	h := newTestHospitalWithStaff(t, newTestRoom(t, 101, 1))
-	inBed := admitTestPatient(t, h, "P1", Moderate)
-	inHallway := admitTestPatient(t, h, "P2", Moderate)
-	admitTestPatient(t, h, "P3", Moderate) // stays awake
+func TestPatientsInHallway(t *testing.T) {
+	h, patients := newTestHospital(t, 1)
+	inBed, inHallway := patients[0], patients[1] // patients[2] stays awake
 
 	if got := h.PatientsInHallway(); got == nil || len(got) != 0 {
 		t.Errorf("PatientsInHallway() before any attack = %v, want an empty non-nil slice", got)
@@ -677,42 +700,233 @@ func TestHospitalPatientsInHallway(t *testing.T) {
 	if len(got) != 1 || got[0] != inHallway {
 		t.Errorf("PatientsInHallway() = %v, want only %s", got, inHallway.ID())
 	}
+
+	// Once awake, the patient is no longer in the hallway.
+	if err := h.WakeUpPatient(inHallway); err != nil {
+		t.Fatalf("WakeUpPatient(%s) error: %v", inHallway.ID(), err)
+	}
+	if got := h.PatientsInHallway(); len(got) != 0 {
+		t.Errorf("PatientsInHallway() after waking up = %v, want empty", got)
+	}
 }
 
-func TestHospitalSevereReport(t *testing.T) {
-	h := newTestHospitalWithStaff(t) // no rooms: everyone sleeps in the hallway
-	twoEpisodes := admitTestPatient(t, h, "P1", Severe)
-	noEpisodes := admitTestPatient(t, h, "P2", Severe)
-	mild := admitTestPatient(t, h, "P3", Mild)
-
-	// P1 falls asleep twice today and P3 (Mild) once.
-	for _, p := range []*Patient{twoEpisodes, mild, twoEpisodes} {
-		if _, err := h.HandleSleepAttack(p, "cafeteria"); !errors.Is(err, ErrNoRoomAvailable) {
-			t.Fatalf("HandleSleepAttack(%s) error = %v, want %v", p.ID(), err, ErrNoRoomAvailable)
+// runSleepAttacks makes n sleep attacks through h, cycling over patients and
+// waking each patient up right after, or stops the test. h must have staff
+// and at least one room, so every attack gets a bed.
+func runSleepAttacks(t *testing.T, h *Hospital, patients []*Patient, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		p := patients[i%len(patients)]
+		if _, err := h.HandleSleepAttack(p, "cafeteria"); err != nil {
+			t.Fatalf("attack #%d: HandleSleepAttack(%s) error: %v", i+1, p.ID(), err)
 		}
 		if err := h.WakeUpPatient(p); err != nil {
-			t.Fatalf("WakeUpPatient(%s) error: %v", p.ID(), err)
+			t.Fatalf("attack #%d: WakeUpPatient(%s) error: %v", i+1, p.ID(), err)
 		}
 	}
+}
+
+func TestSevereReport(t *testing.T) {
+	type patientData struct {
+		id    string
+		level NarcolepsyLevel
+	}
+	tests := []struct {
+		name     string
+		patients []patientData
+		attacks  []string       // IDs of the patients that fall asleep, in order
+		want     map[string]int // patient ID -> episodes today
+	}{
+		{
+			name:     "counts the episodes of each severe patient",
+			patients: []patientData{{"P1", Severe}, {"P2", Severe}},
+			attacks:  []string{"P1", "P2", "P1"},
+			want:     map[string]int{"P1": 2, "P2": 1},
+		},
+		{
+			name:     "severe patient without episodes appears with 0",
+			patients: []patientData{{"P1", Severe}, {"P2", Severe}},
+			attacks:  []string{"P1"},
+			want:     map[string]int{"P1": 1, "P2": 0},
+		},
+		{
+			name:     "mild and moderate patients are excluded",
+			patients: []patientData{{"P1", Mild}, {"P2", Moderate}, {"P3", Severe}},
+			attacks:  []string{"P1", "P2", "P2", "P3"},
+			want:     map[string]int{"P3": 1},
+		},
+		{
+			name:     "no severe patients gives an empty report",
+			patients: []patientData{{"P1", Mild}},
+			attacks:  []string{"P1"},
+			want:     map[string]int{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHospitalWithStaff(t, newTestRoom(t, 101, 1))
+			byID := make(map[string]*Patient)
+			for _, pd := range tt.patients {
+				byID[pd.id] = admitTestPatient(t, h, pd.id, pd.level)
+			}
+			var attacked []*Patient
+			for _, id := range tt.attacks {
+				attacked = append(attacked, byID[id])
+			}
+			runSleepAttacks(t, h, attacked, len(attacked))
+
+			// The report uses *Patient keys; comparing by ID gives readable
+			// messages instead of memory addresses.
+			got := make(map[string]int)
+			for p, n := range h.SevereReport() {
+				got[p.ID()] = n
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("SevereReport() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSevereReport_OnlyToday(t *testing.T) {
+	h := newTestHospitalWithStaff(t, newTestRoom(t, 101, 1))
+	p := admitTestPatient(t, h, "P1", Severe)
+	runSleepAttacks(t, h, []*Patient{p}, 1)
+
 	// An episode from yesterday must not be counted.
 	yesterday := time.Now().AddDate(0, 0, -1)
-	old := newEpisodeRecord("OLD-E1", yesterday, twoEpisodes, newTestDoctor(t, "D-99"), "library", nil)
+	old := newEpisodeRecord("OLD-E1", yesterday, p, newTestDoctor(t, "D-99"), "library", nil)
 	if err := h.RegisterEpisode(old); err != nil {
 		t.Fatalf("RegisterEpisode error: %v", err)
 	}
 
-	report := h.SevereReport()
-	if len(report) != 2 {
-		t.Errorf("len(SevereReport()) = %d, want 2", len(report))
+	if n := h.SevereReport()[p]; n != 1 {
+		t.Errorf("SevereReport()[%s] = %d, want 1", p.ID(), n)
 	}
-	if n, ok := report[twoEpisodes]; !ok || n != 2 {
-		t.Errorf("report[%s] = %d (present %t), want 2", twoEpisodes.ID(), n, ok)
+}
+
+func TestMyEpisodes(t *testing.T) {
+	// The staff is D-01, D-02, O-01 and attack i hits patient Pi, so the
+	// round-robin decides who attends whom.
+	tests := []struct {
+		name    string
+		attacks int
+		want    map[string][]string // doctor ID -> patients they attended
+	}{
+		{"one attack", 1, map[string][]string{"D-01": {"P1"}, "D-02": {}}},
+		{"one turn of the whole staff", 3, map[string][]string{"D-01": {"P1"}, "D-02": {"P2"}}},
+		{"second turn", 5, map[string][]string{"D-01": {"P1", "P4"}, "D-02": {"P2", "P5"}}},
 	}
-	if n, ok := report[noEpisodes]; !ok || n != 0 {
-		t.Errorf("report[%s] = %d (present %t), want 0", noEpisodes.ID(), n, ok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHospitalWithRooms(t, newTestRoom(t, 101, 1))
+			doctors := []*Doctor{newTestDoctor(t, "D-01"), newTestDoctor(t, "D-02")}
+			for _, d := range doctors {
+				if err := h.HireDoctor(d); err != nil {
+					t.Fatalf("HireDoctor(%s) error: %v", d.ID(), err)
+				}
+			}
+			if err := h.HireStaff(newTestOrderly(t, "O-01")); err != nil {
+				t.Fatalf("HireStaff error: %v", err)
+			}
+			var patients []*Patient
+			for i := 1; i <= tt.attacks; i++ {
+				patients = append(patients, admitTestPatient(t, h, fmt.Sprintf("P%d", i), Moderate))
+			}
+			runSleepAttacks(t, h, patients, tt.attacks)
+
+			for _, d := range doctors {
+				var got []string
+				for _, e := range d.MyEpisodes() {
+					if e.AttendedBy().ID() != d.ID() {
+						t.Errorf("%s has episode %s attended by %s", d.ID(), e.ID(), e.AttendedBy().ID())
+					}
+					got = append(got, e.Patient().ID())
+				}
+				if want := tt.want[d.ID()]; !slices.Equal(got, want) {
+					t.Errorf("%s MyEpisodes() patients = %v, want %v", d.ID(), got, want)
+				}
+			}
+		})
 	}
-	if _, ok := report[mild]; ok {
-		t.Errorf("report contains Mild patient %s", mild.ID())
+}
+
+func TestHistoryAttendedByDoctorAndOrderly(t *testing.T) {
+	// The staff is D-01 (*Doctor) and O-01 (*Orderly), taking turns.
+	tests := []struct {
+		name    string
+		attacks int
+		want    map[string]int // staff ID -> records in History()
+	}{
+		{"one attack each", 2, map[string]int{"D-01": 1, "O-01": 1}},
+		{"two attacks each", 4, map[string]int{"D-01": 2, "O-01": 2}},
+		{"odd number of attacks", 5, map[string]int{"D-01": 3, "O-01": 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, patients := newTestHospital(t, 1)
+			runSleepAttacks(t, h, patients, tt.attacks)
+
+			// AttendedBy() is an Attender: ID() works for both types, so no
+			// type switch is needed.
+			got := make(map[string]int)
+			for _, rec := range h.History() {
+				got[rec.AttendedBy().ID()]++
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("records per staff member = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorCases(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(t *testing.T) error
+		want error
+	}{
+		{
+			name: "WakeUp on awake patient",
+			run: func(t *testing.T) error {
+				return newTestPatient(t, "P1").WakeUp()
+			},
+			want: ErrAlreadyAwake,
+		},
+		{
+			name: "SufferSleepAttack on patient asleep in hallway",
+			run: func(t *testing.T) error {
+				return newAsleepPatient(t, "P1").SufferSleepAttack("library")
+			},
+			want: ErrAlreadyAsleep,
+		},
+		{
+			name: "SufferSleepAttack on patient asleep in bed",
+			run: func(t *testing.T) error {
+				h, patients := newTestHospital(t, 1)
+				p := patients[0]
+				if _, err := h.HandleSleepAttack(p, "cafeteria"); err != nil {
+					t.Fatalf("HandleSleepAttack error: %v", err)
+				}
+				return p.SufferSleepAttack("library")
+			},
+			want: ErrAlreadyAsleep,
+		},
+		{
+			name: "AdmitPatient with duplicate ID",
+			run: func(t *testing.T) error {
+				h, _ := newTestHospital(t, 0) // already has P1
+				return h.AdmitPatient(newTestPatient(t, "P1"))
+			},
+			want: ErrDuplicateID,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(t); !errors.Is(err, tt.want) {
+				t.Errorf("error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }
 
