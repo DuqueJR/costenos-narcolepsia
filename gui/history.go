@@ -2,8 +2,6 @@ package main
 
 import (
 	"slices"
-
-	"fyne.io/fyne/v2/theme"
 )
 
 // newHistoryPage builds the History page of app a: the Summary of every
@@ -23,7 +21,7 @@ func newHistoryPage(a *App) page {
 		section:  "Registro",
 		title:    "Historial",
 		subtitle: "Todo lo que ha pasado, de lo más nuevo a lo más viejo",
-		icon:     theme.HistoryIcon(),
+		icon:     icon("clock-counter-clockwise"),
 		content:  newPanel(list),
 	}
 }

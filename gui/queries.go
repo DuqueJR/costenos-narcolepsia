@@ -10,7 +10,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"costenos-narcolepsia/hospital"
@@ -104,7 +103,7 @@ func newQueriesPage(a *App) page {
 		section:  "Registro",
 		title:    "Consultas",
 		subtitle: "Las cuatro consultas del enunciado, al día",
-		icon:     theme.SearchIcon(),
+		icon:     icon("chart-bar"),
 		content:  newPanel(container.NewBorder(container.New(layout.NewCustomPaddedLayout(0, 12, 0, 0), segments), nil, nil, nil, body)),
 	}
 }

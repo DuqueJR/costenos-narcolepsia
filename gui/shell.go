@@ -102,8 +102,8 @@ func newShell(a *App, pages []page) fyne.CanvasObject {
 }
 
 // newSidebar returns the gray column on the left: the app icon and name on
-// top, the menu in the middle and, at the bottom, a Junior pennant, the flag
-// of Colombia and the "reduce motion" switch.
+// top, the menu in the middle and, at the bottom, a Junior pennant and the
+// flag of Colombia.
 func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 	name := canvas.NewText("Costeños", ink)
 	name.TextSize = 16
@@ -117,8 +117,7 @@ func newSidebar(menu fyne.CanvasObject) fyne.CanvasObject {
 		container.New(layout.NewCustomPaddedLayout(0, 0, 10, 0),
 			container.NewVBox(layout.NewSpacer(), cheer, newCaption("Rojiblanco de corazón"), layout.NewSpacer())))
 	madeIn := container.NewHBox(container.NewCenter(newColombiaFlag(20, 13)), newCaption("Hecho en la Costa"))
-	motion := widget.NewCheck("Reducir movimiento", func(on bool) { reduceMotion = on })
-	footer := container.NewVBox(newPanel(container.NewVBox(pennant, widget.NewSeparator(), madeIn)), motion)
+	footer := newPanel(container.NewVBox(pennant, widget.NewSeparator(), madeIn))
 
 	content := container.NewBorder(padded(4, brand), footer, nil, nil, container.NewVScroll(menu))
 
@@ -326,7 +325,7 @@ func newMusicPage() page {
 		section:  "Extras",
 		title:    "Música",
 		subtitle: "Que suene el picó… pero bajito, que hay pacientes durmiendo",
-		icon:     theme.MediaMusicIcon(),
+		icon:     icon("music-notes"),
 		content: newPanel(container.NewBorder(newGarland(10, 22, hairline), nil, nil, nil,
 			container.NewCenter(container.NewVBox(
 				container.NewCenter(newSombrero(150, 100)), text, container.NewCenter(hint))))),

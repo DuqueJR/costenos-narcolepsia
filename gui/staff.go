@@ -55,10 +55,10 @@ func newStaffPage(a *App) page {
 		section:  "Hospital",
 		title:    "Personal",
 		subtitle: "La gente que atiende, por turnos y sin pereza",
-		icon:     theme.LoginIcon(),
+		icon:     icon("stethoscope"),
 		actions: []fyne.CanvasObject{
-			newActionButton("Contratar doctor", theme.ContentAddIcon(), widget.HighImportance, a.showHireDoctorForm),
-			newActionButton("Contratar camillero", theme.ContentAddIcon(), widget.MediumImportance, a.showHireOrderlyForm),
+			newActionButton("Contratar doctor", icon("stethoscope"), widget.HighImportance, a.showHireDoctorForm),
+			newActionButton("Contratar camillero", icon("identification-badge"), widget.MediumImportance, a.showHireOrderlyForm),
 		},
 		content: container.NewVScroll(content),
 	}

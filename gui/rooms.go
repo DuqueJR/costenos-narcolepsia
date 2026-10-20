@@ -29,9 +29,9 @@ func newRoomsPage(a *App) page {
 		section:  "Hospital",
 		title:    "Cuartos",
 		subtitle: "Camas listas pa' cuando a alguien le pique el sueño",
-		icon:     theme.HomeIcon(),
+		icon:     icon("bed"),
 		actions: []fyne.CanvasObject{
-			newActionButton("Agregar cuarto", theme.ContentAddIcon(), widget.HighImportance, a.showAddRoomForm),
+			newActionButton("Agregar cuarto", icon("plus"), widget.HighImportance, a.showAddRoomForm),
 		},
 		content: container.NewVScroll(container.NewVBox(grid)),
 	}

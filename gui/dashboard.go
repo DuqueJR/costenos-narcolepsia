@@ -42,10 +42,10 @@ func newDashboardPage(a *App) page {
 	quote := newTitledPanel("Frase costeña del día", saying)
 
 	quick := newTitledPanel("Acciones rápidas", container.NewGridWithColumns(2,
-		newActionButton("Admitir paciente", theme.AccountIcon(), widget.HighImportance, a.showAdmitPatientForm),
-		newActionButton("Agregar cuarto", theme.HomeIcon(), widget.MediumImportance, a.showAddRoomForm),
-		newActionButton("Contratar doctor", theme.ContentAddIcon(), widget.MediumImportance, a.showHireDoctorForm),
-		newActionButton("Contratar camillero", theme.ContentAddIcon(), widget.MediumImportance, a.showHireOrderlyForm),
+		newActionButton("Admitir paciente", icon("user-plus"), widget.HighImportance, a.showAdmitPatientForm),
+		newActionButton("Agregar cuarto", icon("bed"), widget.MediumImportance, a.showAddRoomForm),
+		newActionButton("Contratar doctor", icon("stethoscope"), widget.MediumImportance, a.showHireDoctorForm),
+		newActionButton("Contratar camillero", icon("identification-badge"), widget.MediumImportance, a.showHireOrderlyForm),
 	))
 
 	recent := container.NewVBox()
@@ -95,7 +95,7 @@ func newDashboardPage(a *App) page {
 		section:  "Hospital",
 		title:    "Resumen",
 		subtitle: "¿Qué más pues? Así va el hospital hoy",
-		icon:     theme.GridIcon(),
+		icon:     icon("squares-four"),
 		content:  container.NewVScroll(content),
 	}
 }

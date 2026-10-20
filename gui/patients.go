@@ -54,9 +54,9 @@ func newPatientsPage(a *App) page {
 		section:  "Hospital",
 		title:    "Pacientes",
 		subtitle: "Sin afán, pero sin dormirse: busca, mira y atiende",
-		icon:     theme.AccountIcon(),
+		icon:     icon("users"),
 		actions: []fyne.CanvasObject{
-			newActionButton("Admitir paciente", theme.ContentAddIcon(), widget.HighImportance, a.showAdmitPatientForm),
+			newActionButton("Admitir paciente", icon("user-plus"), widget.HighImportance, a.showAdmitPatientForm),
 		},
 		content: v.build(),
 	}
@@ -66,7 +66,7 @@ func newPatientsPage(a *App) page {
 func (v *patientsView) build() fyne.CanvasObject {
 	search := widget.NewEntry()
 	search.SetPlaceHolder("Buscar por nombre o ID")
-	search.ActionItem = widget.NewIcon(theme.SearchIcon())
+	search.ActionItem = widget.NewIcon(icon("magnifying-glass"))
 	search.OnChanged = func(s string) {
 		v.query = s
 		// The rows move when the filter changes, so the old highlight would
@@ -129,9 +129,9 @@ func (v *patientsView) buildDetail() fyne.CanvasObject {
 
 	v.attackLocation = widget.NewEntry()
 	v.attackLocation.SetPlaceHolder("¿Dónde se durmió? p. ej. cafeteria")
-	v.attackBtn = newActionButton("Ataque de sueño", theme.WarningIcon(), widget.HighImportance, v.sleepAttack)
-	v.wakeBtn = newActionButton("Despertar", theme.VisibilityIcon(), widget.MediumImportance, v.wakeUp)
-	v.assignBtn = newActionButton("Asignar cuarto", theme.HomeIcon(), widget.HighImportance, v.assignRoom)
+	v.attackBtn = newActionButton("Ataque de sueño", icon("moon-stars"), widget.HighImportance, v.sleepAttack)
+	v.wakeBtn = newActionButton("Despertar", icon("sun-horizon"), widget.MediumImportance, v.wakeUp)
+	v.assignBtn = newActionButton("Asignar cuarto", icon("bed"), widget.HighImportance, v.assignRoom)
 	actions := container.NewVBox(
 		newHeading("Acciones", theme.SizeNameSubHeadingText),
 		container.NewBorder(nil, nil, nil, v.attackBtn, v.attackLocation),

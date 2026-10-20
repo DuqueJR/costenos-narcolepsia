@@ -10,11 +10,6 @@ import (
 	"fyne.io/fyne/v2/layout"
 )
 
-// reduceMotion makes every spring jump straight to its end. Fyne cannot read
-// the "reduce motion" setting of the system, so the sidebar has a switch
-// for it.
-var reduceMotion bool
-
 // Responses of the springs, in the sense Apple uses: about how long the
 // value takes to reach its target. They are not durations; see springStep.
 const (
@@ -47,10 +42,6 @@ func animateSpring(from, to float32, response time.Duration, tick func(v float32
 		if done != nil {
 			done()
 		}
-	}
-	if reduceMotion {
-		finish()
-		return nil
 	}
 	// After 1.5 responses the spring is at more than 99.9%, so it stops
 	// there and snaps the last tiny part.
