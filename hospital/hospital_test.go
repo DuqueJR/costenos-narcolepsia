@@ -445,6 +445,25 @@ func TestHospitalAssignRoomNoneAvailable(t *testing.T) {
 	if p.Room() != nil {
 		t.Errorf("patient room = %v, want nil", p.Room())
 	}
+	if n := len(h.Rooms()); n != 1 {
+		t.Errorf("len(Rooms()) = %d, want 1: AssignRoom must not create rooms", n)
+	}
+}
+
+func TestHospitalAssignRoomWithoutRooms(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	p := newAsleepPatient(t, "P1")
+
+	r, err := h.AssignRoom(p)
+	if !errors.Is(err, ErrNoRoomAvailable) || r != nil {
+		t.Errorf("AssignRoom = room %v, error %v, want nil and %v", r, err, ErrNoRoomAvailable)
+	}
+	if p.State() != AsleepInHallway {
+		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
+	}
+	if n := len(h.Rooms()); n != 0 {
+		t.Errorf("len(Rooms()) = %d, want 0: AssignRoom must not create rooms", n)
+	}
 }
 
 func TestHospitalDispatchRoundRobin(t *testing.T) {
