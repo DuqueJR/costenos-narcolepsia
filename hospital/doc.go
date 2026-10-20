@@ -37,4 +37,17 @@
 // that can fail return an error that wraps one of the sentinel errors in
 // this package, such as ErrNoRoomAvailable, so callers check them with
 // errors.Is.
+//
+// # Concurrency
+//
+// Every exported method of Hospital takes its mutex, so several goroutines
+// can call them at the same time. The entities do not have a mutex of their
+// own, so while goroutines are running the following contract applies:
+//
+//   - Patient, Room, Doctor and Orderly are only modified through the
+//     methods of Hospital (HandleSleepAttack, AssignRoom, WakeUpPatient...),
+//     never by calling their own methods directly.
+//   - Doctor.MyEpisodes and the getters of the entities (Patient.State,
+//     Room.Occupants...) are read only when no goroutine is writing, for
+//     example after wg.Wait().
 package hospital
