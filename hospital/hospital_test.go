@@ -373,3 +373,141 @@ func TestHospitalGettersReturnCopies(t *testing.T) {
 		t.Error("changing the slice from Patients() changed the hospital")
 	}
 }
+
+// newTestHospitalWithRooms builds a hospital with the given rooms or stops
+// the test.
+func newTestHospitalWithRooms(t *testing.T, rooms ...*Room) *Hospital {
+	t.Helper()
+	h := NewHospital("Test Hospital")
+	for _, r := range rooms {
+		if err := h.AddRoom(r); err != nil {
+			t.Fatalf("AddRoom(%d) error: %v", r.Number(), err)
+		}
+	}
+	return h
+}
+
+// newAsleepPatient builds a patient asleep in the hallway or stops the test.
+func newAsleepPatient(t *testing.T, id string) *Patient {
+	t.Helper()
+	p := newTestPatient(t, id)
+	if err := p.SufferSleepAttack("cafeteria"); err != nil {
+		t.Fatalf("SufferSleepAttack(%s) error: %v", id, err)
+	}
+	return p
+}
+
+func TestHospitalAssignRoomAvailable(t *testing.T) {
+	full := newTestRoom(t, 101, 1)
+	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
+		t.Fatalf("Occupy error: %v", err)
+	}
+	free := newTestRoom(t, 102, 1)
+	h := newTestHospitalWithRooms(t, full, free)
+	p := newAsleepPatient(t, "P1")
+
+	r, err := h.AssignRoom(p)
+	if err != nil {
+		t.Fatalf("AssignRoom error: %v", err)
+	}
+	if r != free {
+		t.Fatalf("AssignRoom room = %v, want room %d", r, free.Number())
+	}
+	if r.State() != Occupied {
+		t.Errorf("room state = %v, want %v", r.State(), Occupied)
+	}
+	if p.State() != AsleepInBed {
+		t.Errorf("patient state = %v, want %v", p.State(), AsleepInBed)
+	}
+	if p.Room() != r {
+		t.Errorf("patient room = %v, want room %d", p.Room(), r.Number())
+	}
+}
+
+func TestHospitalAssignRoomNoneAvailable(t *testing.T) {
+	full := newTestRoom(t, 101, 1)
+	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
+		t.Fatalf("Occupy error: %v", err)
+	}
+	h := newTestHospitalWithRooms(t, full)
+	p := newAsleepPatient(t, "P1")
+
+	r, err := h.AssignRoom(p)
+	if !errors.Is(err, ErrNoRoomAvailable) {
+		t.Errorf("AssignRoom error = %v, want %v", err, ErrNoRoomAvailable)
+	}
+	if r != nil {
+		t.Errorf("AssignRoom room = %v, want nil", r)
+	}
+	if p.State() != AsleepInHallway {
+		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
+	}
+	if p.Room() != nil {
+		t.Errorf("patient room = %v, want nil", p.Room())
+	}
+}
+
+func TestHospitalDispatchRoundRobin(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	doctor := newTestDoctor(t, "D-01")
+	orderly := newTestOrderly(t, "O-01")
+	if err := h.HireDoctor(doctor); err != nil {
+		t.Fatalf("HireDoctor error: %v", err)
+	}
+	if err := h.HireStaff(orderly); err != nil {
+		t.Fatalf("HireStaff error: %v", err)
+	}
+
+	want := []Attender{doctor, orderly, doctor, orderly}
+	for i, w := range want {
+		got, err := h.dispatch()
+		if err != nil {
+			t.Fatalf("dispatch #%d error: %v", i+1, err)
+		}
+		if got != w {
+			t.Errorf("dispatch #%d = %s, want %s", i+1, got.ID(), w.ID())
+		}
+	}
+}
+
+func TestHospitalFlowErrors(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	_, assignNilErr := h.AssignRoom(nil)
+	_, assignAwakeErr := h.AssignRoom(newTestPatient(t, "P1"))
+	_, dispatchErr := h.dispatch()
+
+	tests := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"AssignRoom(nil)", assignNilErr, ErrInvalidData},
+		{"AssignRoom(awake)", assignAwakeErr, ErrNotInHallway},
+		{"dispatch without staff", dispatchErr, ErrNoStaff},
+		{"RegisterEpisode(empty)", h.RegisterEpisode(EpisodeRecord{}), ErrInvalidData},
+	}
+	for _, tt := range tests {
+		if !errors.Is(tt.err, tt.want) {
+			t.Errorf("%s error = %v, want %v", tt.name, tt.err, tt.want)
+		}
+	}
+	if n := len(h.History()); n != 0 {
+		t.Errorf("len(History()) = %d, want 0", n)
+	}
+}
+
+func TestHospitalRegisterEpisode(t *testing.T) {
+	h := NewHospital("Test Hospital")
+	rec, err := newTestDoctor(t, "D-01").Attend(newAsleepPatient(t, "P1"), "cafeteria")
+	if err != nil {
+		t.Fatalf("Attend error: %v", err)
+	}
+
+	if err := h.RegisterEpisode(rec); err != nil {
+		t.Fatalf("RegisterEpisode error: %v", err)
+	}
+	history := h.History()
+	if len(history) != 1 || history[0].ID() != rec.ID() {
+		t.Errorf("History() = %v, want only record %s", history, rec.ID())
+	}
+}
