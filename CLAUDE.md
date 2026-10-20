@@ -3,10 +3,6 @@
 Trabajo individual del curso de POO. Enunciado: `docs/enunciado.pdf`. Plan por fases y ramas: `docs/PLAN.md`.
 Antes de cada tarea, lee en `docs/PLAN.md` la sección de la rama que indique el prompt y trabaja SOLO en ese alcance.
 
-## Sobre mí (el estudiante)
-- Estoy aprendiendo Go y mañana debo sustentar y modificar en vivo cualquier línea. Prefiere código simple, idiomático y explicable antes que código ingenioso.
-- Al terminar cada tarea, explícame en español qué hiciste y por qué (receivers, encapsulación, errores, decisiones).
-- Si algo del enunciado o del plan es ambiguo o contradictorio, pregúntame antes de inventar.
 
 ## Reglas técnicas (vienen del enunciado, no negociables)
 - Go >= 1.21. El módulo principal (raíz) usa SOLO librería estándar: su go.mod nunca gana dependencias.
