@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestStatesString(t *testing.T) {
@@ -99,5 +100,41 @@ func TestPatientWakeUpAlreadyAwake(t *testing.T) {
 	err := p.WakeUp()
 	if !errors.Is(err, ErrAlreadyAwake) {
 		t.Errorf("WakeUp error = %v, want %v", err, ErrAlreadyAwake)
+	}
+}
+
+// fakeAttender is a minimal Attender for tests. It never declares that it
+// implements Attender: having the three methods is enough.
+type fakeAttender struct {
+	id   string
+	name string
+}
+
+func (f fakeAttender) ID() string   { return f.id }
+func (f fakeAttender) Name() string { return f.name }
+
+func (f fakeAttender) Attend(p *Patient, location string) (EpisodeRecord, error) {
+	return newEpisodeRecord(f.id+"-E1", time.Now(), p, f, location, p.Room()), nil
+}
+
+func TestEpisodeRecordSummary(t *testing.T) {
+	at := time.Date(2026, 10, 19, 14, 15, 0, 0, time.UTC)
+	p := newTestPatient(t, "P-001")
+	by := fakeAttender{id: "D-001", name: "Dr. Karen Ospina"}
+	room := newTestRoom(t, 101, 2)
+
+	tests := []struct {
+		name string
+		room *Room
+		want string
+	}{
+		{"with room", room, "2026-10-19 14:15 P-001 cafeteria -> room 101 (Dr. Karen Ospina)"},
+		{"hallway", nil, "2026-10-19 14:15 P-001 cafeteria -> hallway (Dr. Karen Ospina)"},
+	}
+	for _, tt := range tests {
+		e := newEpisodeRecord("D-001-E1", at, p, by, "cafeteria", tt.room)
+		if got := e.Summary(); got != tt.want {
+			t.Errorf("%s: Summary() = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
