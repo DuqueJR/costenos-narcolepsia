@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -401,9 +402,12 @@ func TestHospitalDispatchRoundRobin(t *testing.T) {
 		t.Fatalf("HireStaff error: %v", err)
 	}
 
+	// dispatchLocked must be called with the lock held.
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	want := []Attender{doctor, orderly, doctor, orderly}
 	for i, w := range want {
-		got, err := h.dispatch()
+		got, err := h.dispatchLocked()
 		if err != nil {
 			t.Fatalf("dispatch #%d error: %v", i+1, err)
 		}
@@ -417,7 +421,11 @@ func TestHospitalFlowErrors(t *testing.T) {
 	h := NewHospital("Test Hospital")
 	_, assignNilErr := h.AssignRoom(nil)
 	_, assignAwakeErr := h.AssignRoom(newTestPatient(t, "P1"))
-	_, dispatchErr := h.dispatch()
+	// dispatchLocked must be called with the lock held. It is released right
+	// after, because RegisterEpisode and History below take it again.
+	h.mu.Lock()
+	_, dispatchErr := h.dispatchLocked()
+	h.mu.Unlock()
 
 	tests := []struct {
 		name string
@@ -946,5 +954,71 @@ func TestSameDay(t *testing.T) {
 		if got := sameDay(base, tt.b); got != tt.want {
 			t.Errorf("%s: sameDay = %t, want %t", tt.name, got, tt.want)
 		}
+	}
+}
+
+// TestConcurrentSleepAttacks makes 50 patients suffer a sleep attack at the
+// same time, each one in its own goroutine, in a hospital with only 3 single
+// rooms. Run it with -race: without the mutex of Hospital, two goroutines
+// could take the same bed.
+func TestConcurrentSleepAttacks(t *testing.T) {
+	const numPatients = 50
+	h := newTestHospitalWithRooms(t, newTestRoom(t, 101, 1), newTestRoom(t, 102, 1), newTestRoom(t, 103, 1))
+	for _, id := range []string{"D-01", "D-02"} {
+		if err := h.HireDoctor(newTestDoctor(t, id)); err != nil {
+			t.Fatalf("HireDoctor(%s) error: %v", id, err)
+		}
+	}
+	if err := h.HireStaff(newTestOrderly(t, "O-01")); err != nil {
+		t.Fatalf("HireStaff error: %v", err)
+	}
+	var patients []*Patient
+	for i := 1; i <= numPatients; i++ {
+		patients = append(patients, admitTestPatient(t, h, fmt.Sprintf("P%02d", i), Moderate))
+	}
+
+	// Each goroutine writes only its own position of errs, so errs itself
+	// needs no lock. The start channel holds every goroutine until all of
+	// them exist; closing it releases them at the same time.
+	errs := make([]error, numPatients)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i, p := range patients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, errs[i] = h.HandleSleepAttack(p, "cafeteria")
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	var ok, noRoom int
+	for i, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, ErrNoRoomAvailable):
+			noRoom++
+		default:
+			t.Errorf("HandleSleepAttack(%s) unexpected error: %v", patients[i].ID(), err)
+		}
+	}
+	if ok != 3 || noRoom != numPatients-3 {
+		t.Errorf("got %d without error and %d with ErrNoRoomAvailable, want 3 and %d", ok, noRoom, numPatients-3)
+	}
+	if n := len(h.History()); n != numPatients {
+		t.Errorf("len(History()) = %d, want %d", n, numPatients)
+	}
+	occupied := 0
+	for _, r := range h.Rooms() {
+		if n := len(r.Occupants()); n > r.Capacity() {
+			t.Errorf("room %d has %d occupants, capacity %d", r.Number(), n, r.Capacity())
+		}
+		occupied += len(r.Occupants())
+	}
+	if occupied != 3 {
+		t.Errorf("total occupants = %d, want 3 (one per room)", occupied)
 	}
 }
