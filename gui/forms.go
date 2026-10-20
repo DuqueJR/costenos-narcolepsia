@@ -154,10 +154,17 @@ func (a *App) staffIDs() []string {
 }
 
 // nextID returns the first ID made of prefix and a number of digits digits
-// that is not in taken, starting after the number of IDs already taken. For
-// example nextID("P-", 3, ids) returns "P-006" when there are 5 patients.
+// that is not in taken, starting after the IDs of taken that already use
+// prefix. For example nextID("P-", 3, ids) returns "P-006" when there are 5
+// patients, and nextID("O-", 2, staff) ignores the IDs of the doctors.
 func nextID(prefix string, digits int, taken []string) string {
-	for n := len(taken) + 1; ; n++ {
+	n := 1
+	for _, id := range taken {
+		if strings.HasPrefix(id, prefix) {
+			n++
+		}
+	}
+	for ; ; n++ {
 		id := fmt.Sprintf("%s%0*d", prefix, digits, n)
 		if !slices.Contains(taken, id) {
 			return id
