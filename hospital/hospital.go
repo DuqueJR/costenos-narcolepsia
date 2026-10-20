@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 )
 
 // Hospital orchestrates patients, rooms and staff. Its fields are
@@ -185,6 +186,49 @@ func (h *Hospital) WakeUpPatient(p *Patient) error {
 		return fmt.Errorf("wake up patient: %w", err)
 	}
 	return nil
+}
+
+// PatientsInHallway returns the admitted patients that are asleep in a
+// hallway, in the order they were admitted, so an orderly can be sent to
+// them. It returns an empty slice, never nil, when there are none.
+func (h *Hospital) PatientsInHallway() []*Patient {
+	hallway := []*Patient{}
+	for _, p := range h.patients {
+		if p.State() == AsleepInHallway {
+			hallway = append(hallway, p)
+		}
+	}
+	return hallway
+}
+
+// SevereReport returns, for every admitted patient with level Severe, how
+// many episodes they had today according to the history of the hospital.
+// Severe patients without episodes today appear with 0, and patients of
+// other levels never appear. A map has no order, so the caller must sort the
+// keys if it needs a stable order.
+func (h *Hospital) SevereReport() map[*Patient]int {
+	report := make(map[*Patient]int)
+	for _, p := range h.patients {
+		if p.Level() == Severe {
+			report[p] = 0
+		}
+	}
+	today := time.Now()
+	for _, rec := range h.history {
+		// Only patients already in the report (the Severe ones) are counted.
+		if _, ok := report[rec.Patient()]; ok && sameDay(rec.At(), today) {
+			report[rec.Patient()]++
+		}
+	}
+	return report
+}
+
+// sameDay reports whether a and b fall on the same calendar day (same year,
+// month and day), no matter the time of day.
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 // FindPatient returns the admitted patient with the given id. It returns an
