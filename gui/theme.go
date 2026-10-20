@@ -68,6 +68,10 @@ func (caribeTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Co
 		return green
 	case theme.ColorNameForegroundOnPrimary, theme.ColorNameForegroundOnError:
 		return white
+	case theme.ColorNameDisabledButton:
+		return sandDark
+	case theme.ColorNameDisabled:
+		return color.NRGBA{R: 0xA9, G: 0xB3, B: 0xBD, A: 0xFF}
 	}
 	return theme.DefaultTheme().Color(name, theme.VariantLight)
 }
