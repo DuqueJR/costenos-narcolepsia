@@ -397,75 +397,6 @@ func newAsleepPatient(t *testing.T, id string) *Patient {
 	return p
 }
 
-func TestHospitalAssignRoomAvailable(t *testing.T) {
-	full := newTestRoom(t, 101, 1)
-	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
-		t.Fatalf("Occupy error: %v", err)
-	}
-	free := newTestRoom(t, 102, 1)
-	h := newTestHospitalWithRooms(t, full, free)
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if err != nil {
-		t.Fatalf("AssignRoom error: %v", err)
-	}
-	if r != free {
-		t.Fatalf("AssignRoom room = %v, want room %d", r, free.Number())
-	}
-	if r.State() != Occupied {
-		t.Errorf("room state = %v, want %v", r.State(), Occupied)
-	}
-	if p.State() != AsleepInBed {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInBed)
-	}
-	if p.Room() != r {
-		t.Errorf("patient room = %v, want room %d", p.Room(), r.Number())
-	}
-}
-
-func TestHospitalAssignRoomNoneAvailable(t *testing.T) {
-	full := newTestRoom(t, 101, 1)
-	if err := full.Occupy(newAsleepPatient(t, "P0")); err != nil {
-		t.Fatalf("Occupy error: %v", err)
-	}
-	h := newTestHospitalWithRooms(t, full)
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if !errors.Is(err, ErrNoRoomAvailable) {
-		t.Errorf("AssignRoom error = %v, want %v", err, ErrNoRoomAvailable)
-	}
-	if r != nil {
-		t.Errorf("AssignRoom room = %v, want nil", r)
-	}
-	if p.State() != AsleepInHallway {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
-	}
-	if p.Room() != nil {
-		t.Errorf("patient room = %v, want nil", p.Room())
-	}
-	if n := len(h.Rooms()); n != 1 {
-		t.Errorf("len(Rooms()) = %d, want 1: AssignRoom must not create rooms", n)
-	}
-}
-
-func TestHospitalAssignRoomWithoutRooms(t *testing.T) {
-	h := NewHospital("Test Hospital")
-	p := newAsleepPatient(t, "P1")
-
-	r, err := h.AssignRoom(p)
-	if !errors.Is(err, ErrNoRoomAvailable) || r != nil {
-		t.Errorf("AssignRoom = room %v, error %v, want nil and %v", r, err, ErrNoRoomAvailable)
-	}
-	if p.State() != AsleepInHallway {
-		t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
-	}
-	if n := len(h.Rooms()); n != 0 {
-		t.Errorf("len(Rooms()) = %d, want 0: AssignRoom must not create rooms", n)
-	}
-}
-
 func TestHospitalDispatchRoundRobin(t *testing.T) {
 	h := NewHospital("Test Hospital")
 	doctor := newTestDoctor(t, "D-01")
@@ -543,6 +474,107 @@ func newTestHospitalWithStaff(t *testing.T, rooms ...*Room) *Hospital {
 		t.Fatalf("HireStaff error: %v", err)
 	}
 	return h
+}
+
+// newTestHospital builds a hospital with a doctor (D-01), an orderly (O-01),
+// the given number of single rooms (101, 102...) and three admitted awake
+// patients (P1, P2, P3), or stops the test. It returns the patients in the
+// order they were admitted.
+func newTestHospital(t *testing.T, rooms int) (*Hospital, []*Patient) {
+	t.Helper()
+	var rs []*Room
+	for i := 0; i < rooms; i++ {
+		rs = append(rs, newTestRoom(t, 101+i, 1))
+	}
+	h := newTestHospitalWithStaff(t, rs...)
+	patients := []*Patient{
+		admitTestPatient(t, h, "P1", Moderate),
+		admitTestPatient(t, h, "P2", Moderate),
+		admitTestPatient(t, h, "P3", Moderate),
+	}
+	return h, patients
+}
+
+func TestAssignRoom_FreeRoom(t *testing.T) {
+	h, patients := newTestHospital(t, 2)
+	first, second := patients[0], patients[1]
+	full, free := h.Rooms()[0], h.Rooms()[1]
+
+	// first takes room 101, so second must skip it and get room 102.
+	if err := first.SufferSleepAttack("cafeteria"); err != nil {
+		t.Fatalf("SufferSleepAttack(%s) error: %v", first.ID(), err)
+	}
+	if r, err := h.AssignRoom(first); err != nil || r != full {
+		t.Fatalf("AssignRoom(%s) = room %v, error %v, want room %d", first.ID(), r, err, full.Number())
+	}
+	if err := second.SufferSleepAttack("library"); err != nil {
+		t.Fatalf("SufferSleepAttack(%s) error: %v", second.ID(), err)
+	}
+
+	r, err := h.AssignRoom(second)
+	if err != nil {
+		t.Fatalf("AssignRoom(%s) error: %v", second.ID(), err)
+	}
+	if r != free {
+		t.Fatalf("AssignRoom(%s) room = %v, want room %d", second.ID(), r, free.Number())
+	}
+	if r.State() != Occupied {
+		t.Errorf("room state = %v, want %v", r.State(), Occupied)
+	}
+	if second.State() != AsleepInBed {
+		t.Errorf("patient state = %v, want %v", second.State(), AsleepInBed)
+	}
+	if second.Room() != r {
+		t.Errorf("patient room = %v, want room %d", second.Room(), r.Number())
+	}
+	if n := len(full.Occupants()); n != 1 {
+		t.Errorf("room %d has %d occupants, want 1", full.Number(), n)
+	}
+}
+
+func TestAssignRoom_NoRoomAvailable(t *testing.T) {
+	tests := []struct {
+		name  string
+		rooms int
+	}{
+		{"all rooms full", 1},
+		{"hospital without rooms", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, patients := newTestHospital(t, tt.rooms)
+			// Fill every room, so the last patient has nowhere to go.
+			for _, p := range patients[:tt.rooms] {
+				if err := p.SufferSleepAttack("cafeteria"); err != nil {
+					t.Fatalf("SufferSleepAttack(%s) error: %v", p.ID(), err)
+				}
+				if _, err := h.AssignRoom(p); err != nil {
+					t.Fatalf("AssignRoom(%s) error: %v", p.ID(), err)
+				}
+			}
+			p := patients[2]
+			if err := p.SufferSleepAttack("library"); err != nil {
+				t.Fatalf("SufferSleepAttack(%s) error: %v", p.ID(), err)
+			}
+
+			r, err := h.AssignRoom(p)
+			if !errors.Is(err, ErrNoRoomAvailable) {
+				t.Errorf("AssignRoom error = %v, want %v", err, ErrNoRoomAvailable)
+			}
+			if r != nil {
+				t.Errorf("AssignRoom room = %v, want nil", r)
+			}
+			if p.State() != AsleepInHallway {
+				t.Errorf("patient state = %v, want %v", p.State(), AsleepInHallway)
+			}
+			if p.Room() != nil {
+				t.Errorf("patient room = %v, want nil", p.Room())
+			}
+			if n := len(h.Rooms()); n != tt.rooms {
+				t.Errorf("len(Rooms()) = %d, want %d: AssignRoom must not create rooms", n, tt.rooms)
+			}
+		})
+	}
 }
 
 func TestHospitalHandleSleepAttackFillsRooms(t *testing.T) {
@@ -656,11 +688,9 @@ func admitTestPatient(t *testing.T, h *Hospital, id string, level NarcolepsyLeve
 	return p
 }
 
-func TestHospitalPatientsInHallway(t *testing.T) {
-	h := newTestHospitalWithStaff(t, newTestRoom(t, 101, 1))
-	inBed := admitTestPatient(t, h, "P1", Moderate)
-	inHallway := admitTestPatient(t, h, "P2", Moderate)
-	admitTestPatient(t, h, "P3", Moderate) // stays awake
+func TestPatientsInHallway(t *testing.T) {
+	h, patients := newTestHospital(t, 1)
+	inBed, inHallway := patients[0], patients[1] // patients[2] stays awake
 
 	if got := h.PatientsInHallway(); got == nil || len(got) != 0 {
 		t.Errorf("PatientsInHallway() before any attack = %v, want an empty non-nil slice", got)
@@ -676,6 +706,14 @@ func TestHospitalPatientsInHallway(t *testing.T) {
 	got := h.PatientsInHallway()
 	if len(got) != 1 || got[0] != inHallway {
 		t.Errorf("PatientsInHallway() = %v, want only %s", got, inHallway.ID())
+	}
+
+	// Once awake, the patient is no longer in the hallway.
+	if err := h.WakeUpPatient(inHallway); err != nil {
+		t.Fatalf("WakeUpPatient(%s) error: %v", inHallway.ID(), err)
+	}
+	if got := h.PatientsInHallway(); len(got) != 0 {
+		t.Errorf("PatientsInHallway() after waking up = %v, want empty", got)
 	}
 }
 
