@@ -4,33 +4,72 @@ package main
 import (
 	"cmp"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"slices"
+	"time"
 
 	"costenos-narcolepsia/hospital"
 )
 
 func main() {
+	sim := flag.Bool("sim", false, "run the concurrent simulation instead of the scenario")
+	flag.Parse()
+
 	// 1. Build the hospital: staff, rooms and patients.
+	h, patients, err := buildHospital()
+	exitOnError(err)
+
+	fmt.Printf("== %s ==\n", h.Name())
+	fmt.Printf("  %d doctors, %d staff in total, %d rooms, %d patients admitted\n",
+		len(h.Doctors()), len(h.Staff()), len(h.Rooms()), len(h.Patients()))
+
+	if *sim {
+		runSimulation(h)
+		return
+	}
+	runScenario(h, patients)
+}
+
+// buildHospital builds the hospital of the scenario: 2 doctors, 1 orderly,
+// 3 rooms with one bed each and 5 awake patients. It returns the patients in
+// the order they were admitted, or the first error found.
+func buildHospital() (*hospital.Hospital, []*hospital.Patient, error) {
 	h := hospital.NewHospital("Hospital de los Costeños con Narcolepsia")
 
 	karen, err := hospital.NewDoctor("D-01", "Karen Ospina", 41, "Neurology")
-	exitOnError(err)
-	exitOnError(h.HireDoctor(karen))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := h.HireDoctor(karen); err != nil {
+		return nil, nil, err
+	}
 
 	luis, err := hospital.NewDoctor("D-02", "Luis Carlos Barrios", 52, "Sleep Medicine")
-	exitOnError(err)
-	exitOnError(h.HireDoctor(luis))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := h.HireDoctor(luis); err != nil {
+		return nil, nil, err
+	}
 
 	jhon, err := hospital.NewOrderly("O-01", "Jhon Jairo Rada", 29)
-	exitOnError(err)
-	exitOnError(h.HireStaff(jhon))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := h.HireStaff(jhon); err != nil {
+		return nil, nil, err
+	}
 
 	for _, number := range []int{101, 102, 103} {
 		r, err := hospital.NewRoom(number, 1)
-		exitOnError(err)
-		exitOnError(h.AddRoom(r))
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := h.AddRoom(r); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	var patients []*hospital.Patient
@@ -47,15 +86,59 @@ func main() {
 		{"P-005", "Kevin Arrieta", 19, hospital.Moderate},
 	} {
 		p, err := hospital.NewPatient(data.id, data.name, data.age, data.level)
-		exitOnError(err)
-		exitOnError(h.AdmitPatient(p))
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := h.AdmitPatient(p); err != nil {
+			return nil, nil, err
+		}
 		patients = append(patients, p)
 	}
+	return h, patients, nil
+}
 
-	fmt.Printf("== %s ==\n", h.Name())
-	fmt.Printf("  %d doctors, %d staff in total, %d rooms, %d patients admitted\n",
-		len(h.Doctors()), len(h.Staff()), len(h.Rooms()), len(h.Patients()))
+// runSimulation runs the concurrent simulation on h and prints its result
+// and the four queries. Simulate has already waited for every goroutine when
+// it returns, so the queries read a hospital that nobody is changing.
+func runSimulation(h *hospital.Hospital) {
+	cfg := hospital.SimConfig{
+		Rounds:    3,
+		MaxDelay:  50 * time.Millisecond,
+		Locations: []string{"cafeteria", "parking lot", "radiology waiting room", "hallway 2, second floor"},
+	}
+	printHeader("Concurrent simulation")
+	fmt.Printf("  %d patients x %d rounds, random pauses up to %v\n",
+		len(h.Patients()), cfg.Rounds, cfg.MaxDelay)
+	res, err := h.Simulate(cfg)
+	exitOnError(err)
+	fmt.Printf("  attacks: %d, without room: %d, errors: %d\n",
+		res.Attacks, res.RoomFailures, res.Errors)
 
+	printHallway(h)
+	for _, d := range h.Doctors() {
+		printDoctorEpisodes(d)
+	}
+	// Every round ends with WakeUpPatient, so the hallway is normally empty
+	// and there is nobody to assign; the AssignRoom failures during the
+	// simulation are the "without room" count above.
+	printHeader("Room assignment (patients in hallway)")
+	hallway := h.PatientsInHallway()
+	if len(hallway) == 0 {
+		fmt.Println("  (none)")
+	}
+	for _, p := range hallway {
+		if r, err := h.AssignRoom(p); err != nil {
+			fmt.Printf("  %s %v\n", patientColumns(p), err)
+		} else {
+			fmt.Printf("  %s -> room %d\n", patientColumns(p), r.Number())
+		}
+	}
+	printSevereReport(h)
+}
+
+// runScenario runs the required scenario on h, whose patients are the ones
+// returned by buildHospital, and prints every step.
+func runScenario(h *hospital.Hospital, patients []*hospital.Patient) {
 	// 2. Four patients suffer a sleep attack. The fourth one finds no room.
 	printHeader("Sleep attacks")
 	attacks := []struct {
